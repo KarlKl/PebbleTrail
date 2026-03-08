@@ -1,0 +1,40 @@
+{
+  "name": "pebble-trail-v2",
+  "author": "Karl",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "PebbleTrail-v2",
+    "uuid": "28f143cc-56e1-4842-97d7-31c3bb7e8f3b",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "aplite",
+      "basalt",
+      "chalk",
+      "diorite",
+      "emery",
+      "flint",
+      "gabbro"
+    ],
+    "watchapp": {
+      "watchface": false
+    },
+    "messageKeys": [
+      "cmd",
+      "width",
+      "height",
+      "bytes_per_row",
+      "is_color",
+      "total_bytes",
+      "chunk_index",
+      "chunk_offset",
+      "chunk_data"
+    ],
+    "resources": {
+      "media": []
+    }
+  }
+}
