@@ -1,9 +1,10 @@
 #include <pebble.h>
-#include "message_keys.h"
 
 static Window *s_window;
 static Layer *s_canvas_layer;
 static TextLayer *s_status_layer;
+
+static bool s_js_ready;
 
 static uint8_t *s_image_buffer;
 static size_t s_image_buffer_size;
@@ -18,7 +19,12 @@ static AppTimer *s_retry_timer;
 enum {
   CMD_INIT = 1,
   CMD_IMAGE_CHUNK = 2,
+  CMD_BUTTON_CLICK = 3,
 };
+
+bool comm_is_js_ready() {
+  return s_js_ready;
+}
 
 static void prv_reset_image_state(void) {
   s_received_bytes = 0;
@@ -33,6 +39,7 @@ static void prv_reset_image_state(void) {
 static void prv_request_render(void) {
   DictionaryIterator *iter;
   if (app_message_outbox_begin(&iter) != APP_MSG_OK) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to begin AppMessage outbox.");
     return;
   }
 
@@ -42,7 +49,10 @@ static void prv_request_render(void) {
   dict_write_uint16(iter, MESSAGE_KEY_bytes_per_row, s_image_row_bytes);
   dict_write_uint8(iter, MESSAGE_KEY_is_color, s_is_color ? 1 : 0);
 
-  app_message_outbox_send();
+  AppMessageResult result = app_message_outbox_send();
+  if(result != APP_MSG_OK) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Error sending the outbox: %d", (int)result);
+  }
 }
 
 static void prv_retry_timer_handler(void *context) {
@@ -55,12 +65,23 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context) 
   if (!cmd_t) {
     return;
   }
-
-  if (cmd_t->value->uint8 == CMD_IMAGE_CHUNK) {
+  
+  APP_LOG(APP_LOG_LEVEL_INFO, "Inbox message received, cmd: %d", cmd_t->value->uint8);
+  if (cmd_t->value->uint8 == CMD_INIT) {
+    Tuple *ready_t = dict_find(iter, MESSAGE_KEY_JSReady);
+    if (ready_t) {
+      s_js_ready = ready_t->value->uint8 != 0;
+      APP_LOG(APP_LOG_LEVEL_INFO, "JSReady: %d", s_js_ready);
+      prv_request_render();
+    }
+    return;
+  }
+  else if (cmd_t->value->uint8 == CMD_IMAGE_CHUNK) {
     Tuple *total_t = dict_find(iter, MESSAGE_KEY_total_bytes);
     Tuple *offset_t = dict_find(iter, MESSAGE_KEY_chunk_offset);
     Tuple *data_t = dict_find(iter, MESSAGE_KEY_chunk_data);
-
+    
+    APP_LOG(APP_LOG_LEVEL_INFO, "Received image chunk");//, offset: %d, length: %d", offset_t ? offset_t->value->uint32 : 0, data_t ? data_t->length : 0);
     if (!offset_t || !data_t) {
       return;
     }
@@ -98,6 +119,7 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context) 
 }
 
 static void prv_outbox_failed_handler(DictionaryIterator *iter, AppMessageResult reason, void *context) {
+  APP_LOG(APP_LOG_LEVEL_ERROR, "AppMessage outbox failed to send: %d", (int)reason);
   if (!s_retry_timer) {
     s_retry_timer = app_timer_register(1000, prv_retry_timer_handler, NULL);
   }
@@ -167,7 +189,6 @@ static void prv_window_load(Window *window) {
     app_timer_cancel(s_retry_timer);
     s_retry_timer = NULL;
   }
-  prv_request_render();
 }
 
 static void prv_window_unload(Window *window) {
@@ -180,6 +201,33 @@ static void prv_window_unload(Window *window) {
   prv_reset_image_state();
 }
 
+static void send_click(int which) {
+	DictionaryIterator *iter;
+	app_message_outbox_begin(&iter);
+  dict_write_uint8(iter, MESSAGE_KEY_cmd, CMD_BUTTON_CLICK);
+  dict_write_int(iter, MESSAGE_KEY_button_id, &which, sizeof(int), true);
+	dict_write_end(iter);
+	app_message_outbox_send();
+}
+
+static void click_up_handler(ClickRecognizerRef recognizer, void *context) {
+	send_click(-1);
+}
+
+static void click_sel_handler(ClickRecognizerRef recognizer, void *context) {
+	send_click(0);
+}
+
+static void click_down_handler(ClickRecognizerRef recognizer, void *context) {
+	send_click(1);
+}
+
+static void click_config_provider(void *context) {
+	window_single_click_subscribe(BUTTON_ID_UP, click_up_handler);
+	window_single_click_subscribe(BUTTON_ID_SELECT, click_sel_handler);
+	window_single_click_subscribe(BUTTON_ID_DOWN, click_down_handler);
+}
+
 static void prv_init(void) {
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers) {
@@ -187,14 +235,19 @@ static void prv_init(void) {
     .unload = prv_window_unload,
   });
 
+  app_message_register_inbox_received(prv_inbox_received_handler);
+  app_message_register_outbox_failed(prv_outbox_failed_handler);
   const uint32_t inbox = app_message_inbox_size_maximum();
   const uint32_t outbox = app_message_outbox_size_maximum();
   app_message_open(inbox, outbox);
-  app_message_register_inbox_received(prv_inbox_received_handler);
-  app_message_register_outbox_failed(prv_outbox_failed_handler);
 
   const bool animated = true;
   window_stack_push(s_window, animated);
+
+  // button click handlers
+  window_set_click_config_provider(s_window, click_config_provider);
+
+  APP_LOG(APP_LOG_LEVEL_INFO, "App initialized with inbox size: %d, outbox size: %d", (int)inbox, (int)outbox);
 }
 
 static void prv_deinit(void) {

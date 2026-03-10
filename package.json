@@ -6,10 +6,15 @@
   "private": true,
   "dependencies": {},
   "pebble": {
+    "capabilities": [
+      "location",
+      "configurable"
+    ],
     "displayName": "PebbleTrail-v2",
     "uuid": "28f143cc-56e1-4842-97d7-31c3bb7e8f3b",
     "sdkVersion": "3",
     "enableMultiJS": true,
+    "projectType": "native",
     "targetPlatforms": [
       "aplite",
       "basalt",
@@ -24,6 +29,7 @@
     },
     "messageKeys": [
       "cmd",
+      "JSReady",
       "width",
       "height",
       "bytes_per_row",
@@ -31,7 +37,8 @@
       "total_bytes",
       "chunk_index",
       "chunk_offset",
-      "chunk_data"
+      "chunk_data",
+      "button_id"
     ],
     "resources": {
       "media": []

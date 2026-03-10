@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>PebbleTrail Test App</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+	<style type="text/css">
+		body { background: #000; color: #fff; }
+	</style>
+</head>
+<body>
+	<div id="canvasDebug"></div>
+	<script>
+		Pebble = {
+			_events: [],
+			fake: true,
+			addEventListener: function(event, fun) {
+				this._events[event] = fun;
+			},
+			sendAppMessage: function(obj, success) {
+				//console.log('fake sending data to pebble');
+				setTimeout(success, 50);
+			}
+		}
+
+		setTimeout(function() {
+			Pebble._events['ready'] && Pebble._events['ready']();
+		}, 100);
+		setTimeout(() => {
+			const mockWatchAppInitData = { cmd: 1, width: 144, height: 168, bytes_per_row: 18, is_color: 0 };
+			Pebble._events['appmessage'] &&
+				Pebble._events['appmessage']({ payload: mockWatchAppInitData });
+		}, 500);
+	</script>
+	<script src="./src/pkjs/index.js"></script>
+	<button onclick="config.zoomLevel = Math.max(0, config.zoomLevel + 1); renderTileToWatch();">Zoom In</button>
+	<button onclick="config.zoomLevel = Math.min(19, config.zoomLevel - 1); renderTileToWatch();">Zoom Out</button>
+
+	<select id="tileProviderSelect" onchange="config.tileProvider = this.value; renderTileToWatch();">
+		<option value="osm">OpenStreetMap</option>
+		<option value="osm_cyclosm">OpenStreetMap CyclOSM</option>
+		<option value="stamen_watercolor">Stamen Watercolor</option>
+		<option value="stamen_toner">Stamen Toner</option>
+		<option value="stamen_terrain">Stamen Terrain</option>
+	</select>
+</body>
+</html>
