@@ -1,0 +1,83 @@
+module.exports = [
+  {
+    "type": "heading",
+    "defaultValue": "PebbleTrail Configuration"
+  },
+  {
+    "type": "text",
+    "defaultValue": "Configure your PebbleTrail watchface settings below. Changes will be sent to your watch immediately."
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Appearance"
+      },
+      {
+        "type": "toggle",
+        "messageKey": "showCurrentLocationDot",
+        "defaultValue": true,
+        "label": "Show Current Location Dot"
+      },
+      {
+        "type": "select",
+        "messageKey": "tileProvider",
+        "defaultValue": "stamen_toner",
+        "label": "Map Provider",
+        "options": [
+          { "label": "OpenStreetMap", "value": "osm" },
+          { "label": "CyclOSM", "value": "osm_cyclosm" },
+          { "label": "Stamen Watercolor", "value": "stamen_watercolor" },
+          { "label": "Stamen Toner", "value": "stamen_toner" },
+          { "label": "Stamen Terrain", "value": "stamen_terrain" }
+        ]
+      },
+      {
+        "type": "slider",
+        "messageKey": "zoomLevel",
+        "defaultValue": 16,
+        "label": "Start Zoom Level",
+        "min": 10,
+        "max": 20,
+        "step": 1
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "GPX"
+      },
+      {
+        "type": "color",
+        "messageKey": "gpxTrackColor",
+        "label": "GPX Track Color",
+        "defaultValue": "#0000FF",
+        "capabilities": ["color"]
+      },
+      {
+        "type": "text",
+        "defaultValue": "Enter the URL of a GPX file to have its track points displayed on the watchface. OR paste the gpx file as text."
+      },
+      {
+        "type": "input",
+        "messageKey": "GPX_URL",
+        "label": "GPX URL",
+        "defaultValue": ""
+      },
+      {
+        "type": "input",
+        "messageKey": "GPX_TEXT",
+        "label": "GPX Text",
+        "defaultValue": ""
+      }
+    ]
+  },
+  {
+    "type": "submit",
+    "defaultValue": "Save Settings"
+  }
+];

@@ -2,6 +2,13 @@ try {
     const { parseGpxTrackPoints } = require('./gpxParser.js');
     
     require('./env.js');
+    
+    // Import the Clay package
+    var Clay = require('@rebble/clay');
+    // Load our Clay configuration file
+    var clayConfig = require('./config');
+    // Initialize Clay
+    var clay = new Clay(clayConfig, null, { autoHandleEvents: false });
 } catch (e) {
     console.log("Could not load gpxParser.js");
 }
@@ -32,6 +39,7 @@ var config = {
     tileProvider: 'osm',
     updateIntervalMs: 15000,
     zoomLevel: 16,
+    showCurrentLocationDot: true,
 };
 
 var renderState = {
@@ -318,28 +326,32 @@ function renderTileToWatch() {
         }
 
         // draw gpx track points, if any
-        canvasContext.beginPath();
-        canvasContext.strokeStyle = 'rgba(0, 0, 255, 0.8)';
-        canvasContext.lineWidth = 3;
-        gpxState.points.forEach(pt => {
-            var tileX = long2tileFloat(pt.lon, zoom);
-            var tileY = lat2tileFloat(pt.lat, zoom);
-            var worldX = tileX * tileSize;
-            var worldY = tileY * tileSize;
-            var x = worldX - topLeftWorldX;
-            var y = worldY - topLeftWorldY;
+        if (gpxState.points.length > 0) {
+            canvasContext.beginPath();
+            canvasContext.strokeStyle = config.gpxTrackColor || 'rgba(0, 0, 255, 0.8)';
+            canvasContext.lineWidth = 3;
+            gpxState.points.forEach(pt => {
+                var tileX = long2tileFloat(pt.lon, zoom);
+                var tileY = lat2tileFloat(pt.lat, zoom);
+                var worldX = tileX * tileSize;
+                var worldY = tileY * tileSize;
+                var x = worldX - topLeftWorldX;
+                var y = worldY - topLeftWorldY;
 
-            canvasContext.lineTo(x, y);
-        });
-        canvasContext.stroke();
+                canvasContext.lineTo(x, y);
+            });
+            canvasContext.stroke();
+        }
 
         // draw gps dot
-        var gpsDotX = (centerTileX * tileSize) - topLeftWorldX;
-        var gpsDotY = (centerTileY * tileSize) - topLeftWorldY;
-        canvasContext.beginPath();
-        canvasContext.arc(gpsDotX, gpsDotY, 4, 0, 2 * Math.PI);
-        canvasContext.fillStyle = 'rgba(255, 0, 0, 0.8)';
-        canvasContext.fill();
+        if (config.showCurrentLocationDot) {
+            var gpsDotX = (centerTileX * tileSize) - topLeftWorldX;
+            var gpsDotY = (centerTileY * tileSize) - topLeftWorldY;
+            canvasContext.beginPath();
+            canvasContext.arc(gpsDotX, gpsDotY, 4, 0, 2 * Math.PI);
+            canvasContext.fillStyle = 'rgba(255, 0, 0, 0.8)';
+            canvasContext.fill();
+        }
 
         var imageData = canvasContext.getImageData(0, 0, width, height);
         var packed = isColor ? packColor(imageData, width, height)
@@ -398,11 +410,6 @@ function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
 
 function deg2rad(deg) {
     return deg * (Math.PI / 180);
-}
-
-function parseGpx(gpxString) {
-    gpxState.points = parseGpxTrackPoints(gpxString);
-    console.log("Parsed " + gpxState.points.length + " track points from GPX");
 }
 
 Pebble.addEventListener("appmessage", function(e) {
@@ -475,3 +482,37 @@ if (navigator.geolocation) {
 } else {
     console.log("Geolocation is not supported by this browser.");
 }
+
+Pebble.addEventListener('showConfiguration', function(e) {
+	Pebble.openURL(clay.generateUrl());
+});
+
+Pebble.addEventListener('webviewclosed', function (e) {
+	console.log('webview closed');
+	if (e && e.response) {
+		var newSettings = clay.getSettings(e.response, false);
+		config.showCurrentLocationDot = newSettings.showCurentLocationDot.value;
+		config.tileProvider = newSettings.tileProvider.value;
+		config.updateIntervalMs = newSettings.updateIntervalMs.value * 1;
+		config.zoomLevel = newSettings.zoomLevel.value * 1;
+        // gpx stuff
+        config.gpxTrackColor = newSettings.gpxTrackColor.value;
+		gpxState.points = [];
+        if (newSettings.GPX_URL.value) {
+            fetch(newSettings.GPX_URL.value)
+                .then(response => response.text())
+                .then(gpxText => {
+                    gpxState.points = parseGpxTrackPoints(gpxText);
+                })
+                .catch(err => {
+                    console.log("Failed to fetch GPX file: " + JSON.stringify(err));
+                });
+        } else if (newSettings.GPX_TEXT.value) {
+            gpxState.points = parseGpxTrackPoints(newSettings.GPX_TEXT.value);
+        }
+		localStorage.settings = JSON.stringify(config);
+
+        renderTileToWatch();
+		resetTimers();
+	}
+});

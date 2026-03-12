@@ -1,16 +1,20 @@
 {
-  "name": "pebble-trail-v2",
+  "name": "pebble-trail",
   "author": "Karl",
   "version": "1.0.0",
-  "keywords": ["pebble-app"],
+  "keywords": [
+    "pebble-app"
+  ],
   "private": true,
-  "dependencies": {},
+  "dependencies": {
+    "@rebble/clay": "^1.0.0"
+  },
   "pebble": {
     "capabilities": [
       "location",
       "configurable"
     ],
-    "displayName": "PebbleTrail-v2",
+    "displayName": "PebbleTrail",
     "uuid": "28f143cc-56e1-4842-97d7-31c3bb7e8f3b",
     "sdkVersion": "3",
     "enableMultiJS": true,
