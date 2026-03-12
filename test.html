@@ -14,6 +14,7 @@
 		<canvas id="debugCanvasOutput" width="144" height="168" style="border:1px solid #fff;"></canvas>
 	</div>
 	<script>
+
 		Pebble = {
 			_events: [],
 			fake: true,
@@ -28,78 +29,47 @@
 					return;
 				}
 				var debugCanvasOutput = document.getElementById('debugCanvasOutput');
-				var bytesPerRow = renderState.bytesPerRow; // for monochrome, this is 18 for 144px width (144/8)
-				var offset = obj.chunk_index * CHUNK_SIZE;
+				var offset = obj.chunk_offset;
 				var chunk = obj.chunk_data;
 				var ctx = debugCanvasOutput.getContext('2d');
 				if (obj.chunk_index === 0) {
 					ctx.clearRect(0, 0, debugCanvasOutput.width, debugCanvasOutput.height);
 				}
+				var isColor = renderState.isColor;
 				for (var i = 0; i < chunk.length; i++) {
-					var x = (offset + i) % debugCanvasOutput.width;
-					var y = Math.floor((offset + i) / debugCanvasOutput.width);
-					var isColor = renderState.isColor;
 					if (isColor) {
-						// check if rgbaToPebbleColor set the bits for this pixel
-						var byte = chunk[i];
-						var r = (byte >> 4) & 0x03;
-						var g = (byte >> 2) & 0x03;
-						var b = byte & 0x03;
+						var pixelIndex = offset + i;
+						var x = pixelIndex % debugCanvasOutput.width;
+						var y = Math.floor(pixelIndex / debugCanvasOutput.width);
+						if (y >= debugCanvasOutput.height) {
+							break;
+						}
+
+						var colorByte = chunk[i];
+						var r = (colorByte >> 4) & 0x03;
+						var g = (colorByte >> 2) & 0x03;
+						var b = colorByte & 0x03;
 						ctx.fillStyle = `rgb(${r * 85}, ${g * 85}, ${b * 85})`;
+						ctx.fillRect(x, y, 1, 1);
 					} else {
-						// check if packMonochrome set the bit for this pixel
-						var byteIndex = Math.floor((offset + i) / 8);
-						var bitIndex = 7 - ((offset + i) % 8);
-						var byte = chunk[byteIndex];
-						var bit = (byte >> bitIndex) & 0x01;
-						ctx.fillStyle = bit ? '#fff' : '#000';
-					}
-					ctx.fillRect(x, y, 1, 1);
-				}
-			}
-		}
-
-
-		function quantize2(value) {
-			var v = Math.floor((value + 42) / 85);
-			if (v < 0) {
-				return 0;
-			}
-			if (v > 3) {
-				return 3;
-			}
-			return v;
-		}
-
-		function rgbaToPebbleColor(r, g, b) {
-			var r2 = quantize2(r);
-			var g2 = quantize2(g);
-			var b2 = quantize2(b);
-			return 0xC0 | (r2 << 4) | (g2 << 2) | b2;
-		}
-
-		function packMonochrome(imageData, width, height, bytesPerRow) {
-			var packed = new Uint8Array(bytesPerRow * height);
-			var data = imageData.data;
-
-			for (var y = 0; y < height; y++) {
-				for (var x = 0; x < width; x++) {
-					var idx = (y * width + x) * 4;
-					var r = data[idx];
-					var g = data[idx + 1];
-					var b = data[idx + 2];
-					var luminance = (r * 0.2126) + (g * 0.7152) + (b * 0.0722);
-					var bit = luminance > 128 ? 1 : 0;
-					if (bit) {
-						var byteIndex = y * bytesPerRow + (x >> 3);
-						var bitIndex = 7 - (x & 7);
-						packed[byteIndex] |= (1 << bitIndex);
+						// In monochrome, each byte packs 8 pixels (MSB first).
+						var monoByte = chunk[i];
+						var basePixel = (offset + i) * 8;
+						for (var bit = 0; bit < 8; bit++) {
+							var pixel = basePixel + bit;
+							var px = pixel % debugCanvasOutput.width;
+							var py = Math.floor(pixel / debugCanvasOutput.width);
+							if (py >= debugCanvasOutput.height) {
+								break;
+							}
+							var isSet = (monoByte >> (7 - bit)) & 0x01;
+							ctx.fillStyle = isSet ? '#fff' : '#000';
+							ctx.fillRect(px, py, 1, 1);
+						}
 					}
 				}
 			}
-
-			return packed;
-		}
+		};
 
 		setTimeout(function() {
 			Pebble._events['ready'] && Pebble._events['ready']();
@@ -116,6 +86,8 @@
 				Pebble._events['appmessage']({ payload: mockWatchAppInitData });
 		}
 	</script>
+	<script src="./src/pkjs/env.js"></script>
+	<script src="./src/pkjs/gpxParser.js"></script>
 	<script src="./src/pkjs/index.js"></script>
 	<button onclick="config.zoomLevel = Math.max(0, config.zoomLevel + 1); renderTileToWatch();">Zoom In</button>
 	<button onclick="config.zoomLevel = Math.min(19, config.zoomLevel - 1); renderTileToWatch();">Zoom Out</button>
@@ -132,5 +104,7 @@
 		<option value="stamen_toner">Stamen Toner</option>
 		<option value="stamen_terrain">Stamen Terrain</option>
 	</select>
+
+	<button onclick="parseGpx(prompt('Paste GPX data here')); renderTileToWatch();">Load GPX</button>
 </body>
 </html>

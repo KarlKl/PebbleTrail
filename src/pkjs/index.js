@@ -1,7 +1,15 @@
+try {
+    const { parseGpxTrackPoints } = require('./gpxParser.js');
+    
+    require('./env.js');
+} catch (e) {
+    console.log("Could not load gpxParser.js");
+}
+
 const INIT_LAT = 48.3067582;
 const INIT_LON = 14.2861719;
 const CHUNK_SIZE = 7 * 1024;
-const LUMINANCE_THRESHOLD = 150; // higher = more likely to be black, lower = more likely to be white
+const LUMINANCE_THRESHOLD = 190; // higher = more likely to be black, lower = more likely to be white
 const BTN_UP = 1;
 const BTN_SELECT = 2;
 const BTN_DOWN = 3;
@@ -10,12 +18,13 @@ const CMD_INIT = 1;
 const CMD_IMAGE_CHUNK = 2;
 const CMD_BUTTON_CLICK = 3;
 
+
 var tileUrls = {
     osm: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     osm_cyclosm: 'https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
-    stamen_watercolor: 'https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg',
-    stamen_toner: 'https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}.jpg',
-    stamen_terrain: 'https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.jpg',
+    stamen_watercolor: `https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.png?api_key={STADIAMAPS_API_KEY}`,
+    stamen_toner: `https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}.png?api_key={STADIAMAPS_API_KEY}`,
+    stamen_terrain: `https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png?api_key={STADIAMAPS_API_KEY}`,
 };
 
 // Configuration
@@ -41,6 +50,10 @@ var gpsState = {
     longitude: INIT_LON,
     accuracy: 0,
     timestamp: 0,
+};
+
+var gpxState = {
+    points: [],
 };
 
 var canvasContext = null;
@@ -304,6 +317,30 @@ function renderTileToWatch() {
             return;
         }
 
+        // draw gpx track points, if any
+        canvasContext.beginPath();
+        canvasContext.strokeStyle = 'rgba(0, 0, 255, 0.8)';
+        canvasContext.lineWidth = 3;
+        gpxState.points.forEach(pt => {
+            var tileX = long2tileFloat(pt.lon, zoom);
+            var tileY = lat2tileFloat(pt.lat, zoom);
+            var worldX = tileX * tileSize;
+            var worldY = tileY * tileSize;
+            var x = worldX - topLeftWorldX;
+            var y = worldY - topLeftWorldY;
+
+            canvasContext.lineTo(x, y);
+        });
+        canvasContext.stroke();
+
+        // draw gps dot
+        var gpsDotX = (centerTileX * tileSize) - topLeftWorldX;
+        var gpsDotY = (centerTileY * tileSize) - topLeftWorldY;
+        canvasContext.beginPath();
+        canvasContext.arc(gpsDotX, gpsDotY, 4, 0, 2 * Math.PI);
+        canvasContext.fillStyle = 'rgba(255, 0, 0, 0.8)';
+        canvasContext.fill();
+
         var imageData = canvasContext.getImageData(0, 0, width, height);
         var packed = isColor ? packColor(imageData, width, height)
                              : packMonochrome(imageData, width, height, bytesPerRow);
@@ -343,7 +380,8 @@ function getTileUrl(provider, zoom, x, y) {
     var template = tileUrls[provider];
     return template.replace("{z}", zoom)
                    .replace("{x}", x)
-                   .replace("{y}", y);
+                   .replace("{y}", y)
+                   .replace("{STADIAMAPS_API_KEY}", STADIAMAPS_API_KEY);
 }
 
 function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
@@ -360,6 +398,11 @@ function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
 
 function deg2rad(deg) {
     return deg * (Math.PI / 180);
+}
+
+function parseGpx(gpxString) {
+    gpxState.points = parseGpxTrackPoints(gpxString);
+    console.log("Parsed " + gpxState.points.length + " track points from GPX");
 }
 
 Pebble.addEventListener("appmessage", function(e) {
