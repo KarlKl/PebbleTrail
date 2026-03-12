@@ -1,6 +1,7 @@
-var INIT_LAT = 48.3067582;
-var INIT_LON = 14.2861719;
-var CHUNK_SIZE = 200;
+const INIT_LAT = 48.3067582;
+const INIT_LON = 14.2861719;
+const CHUNK_SIZE = 7 * 1024;
+const LUMINANCE_THRESHOLD = 150; // higher = more likely to be black, lower = more likely to be white
 const BTN_UP = 1;
 const BTN_SELECT = 2;
 const BTN_DOWN = 3;
@@ -72,21 +73,12 @@ if (!window.Image) {
 	}
 }
 
-function long2tile(lon, zoom) {
-    return Math.floor((lon + 180) / 360 * Math.pow(2, zoom));
-}
-
-function lat2tile(lat, zoom) {
-    var latRad = lat * Math.PI / 180;
-    return Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, zoom));
-}
-
 function long2tileFloat(lon, zoom) {
     return (lon + 180) / 360 * Math.pow(2, zoom);
 }
 
 function lat2tileFloat(lat, zoom) {
-    var latRad = lat * Math.PI / 180;
+    var latRad = deg2rad(lat);
     return (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, zoom);
 }
 
@@ -124,7 +116,7 @@ function packMonochrome(imageData, width, height, bytesPerRow) {
             var g = data[idx + 1];
             var b = data[idx + 2];
             var luminance = (r * 0.2126) + (g * 0.7152) + (b * 0.0722);
-            var bit = luminance > 128 ? 1 : 0;
+            var bit = luminance > LUMINANCE_THRESHOLD ? 1 : 0;
             if (bit) {
                 var byteIndex = y * bytesPerRow + (x >> 3);
                 var bitIndex = 7 - (x & 7);
@@ -354,6 +346,22 @@ function getTileUrl(provider, zoom, x, y) {
                    .replace("{y}", y);
 }
 
+function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
+    var R = 6371000; // Radius of the earth in meters
+    var dLat = deg2rad(lat2 - lat1);
+    var dLon = deg2rad(lon2 - lon1);
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    var distance = R * c; // Distance in meters
+    return distance;
+}
+
+function deg2rad(deg) {
+    return deg * (Math.PI / 180);
+}
+
 Pebble.addEventListener("appmessage", function(e) {
     console.log("AppMessage received: " + JSON.stringify(e));
     var payload = e.payload || {};
@@ -403,6 +411,11 @@ Pebble.addEventListener("ready", function() {
 if (navigator.geolocation) {
     setInterval(function() {
         navigator.geolocation.getCurrentPosition(function(position) {
+            // update watch if changed significantly (more than 10m)
+            var distance = getDistanceFromLatLonInMeters(gpsState.latitude, gpsState.longitude, position.coords.latitude, position.coords.longitude);
+            if (distance < 10) {
+                return;
+            }
             gpsState.latitude = position.coords.latitude;
             gpsState.longitude = position.coords.longitude;
             gpsState.accuracy = position.coords.accuracy;
