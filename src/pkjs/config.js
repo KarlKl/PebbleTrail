@@ -55,8 +55,8 @@ module.exports = [
         "type": "color",
         "messageKey": "gpxTrackColor",
         "label": "GPX Track Color",
-        "defaultValue": "#0000FF",
-        "capabilities": ["color"]
+        "defaultValue": 255,
+        "capabilities": ["COLOR"]
       },
       {
         "type": "text",
@@ -64,13 +64,13 @@ module.exports = [
       },
       {
         "type": "input",
-        "messageKey": "GPX_URL",
+        "messageKey": "gpxUrl",
         "label": "GPX URL",
         "defaultValue": ""
       },
       {
         "type": "input",
-        "messageKey": "GPX_TEXT",
+        "messageKey": "gpxText",
         "label": "GPX Text",
         "defaultValue": ""
       }

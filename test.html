@@ -87,7 +87,6 @@
 		}
 	</script>
 	<script src="./src/pkjs/env.js"></script>
-	<script src="./src/pkjs/gpxParser.js"></script>
 	<script src="./src/pkjs/index.js"></script>
 	<button onclick="config.zoomLevel = Math.max(0, config.zoomLevel + 1); renderTileToWatch();">Zoom In</button>
 	<button onclick="config.zoomLevel = Math.min(19, config.zoomLevel - 1); renderTileToWatch();">Zoom Out</button>
@@ -105,6 +104,6 @@
 		<option value="stamen_terrain">Stamen Terrain</option>
 	</select>
 
-	<button onclick="parseGpx(prompt('Paste GPX data here')); renderTileToWatch();">Load GPX</button>
+	<button onclick="parseGpxTrackPointsAndSave(prompt('Paste GPX data here')); renderTileToWatch();">Load GPX</button>
 </body>
 </html>

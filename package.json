@@ -15,6 +15,7 @@
       "configurable"
     ],
     "displayName": "PebbleTrail",
+    "shortName": "PebbleTrail",
     "uuid": "28f143cc-56e1-4842-97d7-31c3bb7e8f3b",
     "sdkVersion": "3",
     "enableMultiJS": true,

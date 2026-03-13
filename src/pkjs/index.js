@@ -1,6 +1,4 @@
 try {
-    const { parseGpxTrackPoints } = require('./gpxParser.js');
-    
     require('./env.js');
     
     // Import the Clay package
@@ -40,6 +38,7 @@ var config = {
     updateIntervalMs: 15000,
     zoomLevel: 16,
     showCurrentLocationDot: true,
+    gpxPoints: [],
 };
 
 var renderState = {
@@ -58,10 +57,6 @@ var gpsState = {
     longitude: INIT_LON,
     accuracy: 0,
     timestamp: 0,
-};
-
-var gpxState = {
-    points: [],
 };
 
 var canvasContext = null;
@@ -193,43 +188,6 @@ function sendNextChunk() {
     });
 }
 
-
-function getMockCanvasContext() {
-	var noop = function() {};
-
-	return {
-		setTransform: noop,
-        clearRect: noop,
-		fillRect: noop,
-		beginPath: noop,
-		arc: noop,
-		fill: noop,
-		fillText: noop,
-		drawImage: noop,
-		getImageData: function(x, y, w, h) {
-			// copy warning image to data buffer
-			var data = new Uint8Array((w-x) * (h-y) * 4);
-
-			for (var i = 0; i < data.length; i++) data[i] = 255;
-
-			for (var i = 0; i < warnImg.length; i++) {
-				for (var b = 0; b < 8; b++) {
-					data[160 * 4 * 48 + (i * 8 + b) * 4 + 1] = (warnImg.charCodeAt(i) >> b) & 1 ? 255 : 0;
-				}
-			}
-
-			return {
-				data: data,
-				width: (w-x),
-				height: (h-y),
-			};
-		},
-		putImageData: noop,
-	};
-}
-
-var warnImg = atob('///9/+/+//3//v7f/3///1////////j/X////f/+/v//f///X///////+P9fs9V1Rrxm15xfc8Yq/v///3/w/7+t5am1XlpXay+ttXT/////f/L/v631re3ewloPby3sdv////8/5f+/rfWt3d76Wu9vrd92/////x/C/7+t9K21Xtpaay+ttXb/////H8D/v3P1bc685t2cX3POdv7///+PiP///////////////////////0cQ////////////////////////pyj//////94FfX38////v/////9TUP7/////3t05ff////+//////6Eo/I+t1lnc3Tm9f8baxbj/////UVX8by2llh7cVT2+vdS9tv////+oqPjfrbXW3t1V/b2Pto69////f1RQ8b+ttdbe3VX9vbe2trv///9/qqrybyWl1t7dVb29tba29v///z8AAOCfq9bZ3N1tYX6Odo+5////HwAAwP+/9////////////////////////7/3/////////////////w==');
-
 function initCanvas(width, height) {
 	try {
 		canvas = document.createElement('canvas');
@@ -240,9 +198,7 @@ function initCanvas(width, height) {
 		}
 		return canvas.getContext('2d');
 	} catch(ex) {
-		console.log('HTML5 canvas NOT SUPPORTED!');
 		canvas = {};
-		return getMockCanvasContext();
 	}
 	
 }
@@ -326,11 +282,11 @@ function renderTileToWatch() {
         }
 
         // draw gpx track points, if any
-        if (gpxState.points.length > 0) {
+        if (config.gpxPoints.length > 0) {
             canvasContext.beginPath();
             canvasContext.strokeStyle = config.gpxTrackColor || 'rgba(0, 0, 255, 0.8)';
             canvasContext.lineWidth = 3;
-            gpxState.points.forEach(pt => {
+            config.gpxPoints.forEach(pt => {
                 var tileX = long2tileFloat(pt.lon, zoom);
                 var tileY = lat2tileFloat(pt.lat, zoom);
                 var worldX = tileX * tileSize;
@@ -412,6 +368,42 @@ function deg2rad(deg) {
     return deg * (Math.PI / 180);
 }
 
+/**
+ * Parses a GPX string and extracts all track points (<trkpt>).
+ * @param {string} gpxString - The GPX file content as a string.
+ * @returns {Array<Object>} - Array of track points with lat, lon, ele, and time.
+ */
+function parseGpxTrackPointsAndSave(gpxString) {
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(gpxString, 'text/xml');
+  const trkpts = xmlDoc.getElementsByTagName('trkpt');
+
+  var points = [];
+  try {
+    points = Array.from(trkpts).map(trkpt => {
+      var eleElem = trkpt.getElementsByTagName('ele')[0];
+      var timeElem = trkpt.getElementsByTagName('time')[0];
+      return {
+        lat: parseFloat(trkpt.getAttribute('lat')),
+        lon: parseFloat(trkpt.getAttribute('lon')),
+        ele: eleElem ? parseFloat(eleElem.textContent) : null,
+        time: timeElem ? timeElem.textContent : null
+      };
+    });
+  } catch (err) {
+    console.log("Error parsing GPX track points: " + JSON.stringify(err));
+  }
+  if (points.length > 0) {
+    console.log("Parsed " + points.length + " GPX track points, sample: " + JSON.stringify(points[0]));
+  } else {
+    console.log("No GPX track points found in provided data");
+  }
+  config.gpxPoints = points;
+  localStorage.settings = JSON.stringify(config);
+  return points;
+}
+
+
 Pebble.addEventListener("appmessage", function(e) {
     console.log("AppMessage received: " + JSON.stringify(e));
     var payload = e.payload || {};
@@ -444,7 +436,16 @@ Pebble.addEventListener("appmessage", function(e) {
 
 Pebble.addEventListener("ready", function() {
     console.log("PKJS ready, waiting for watch request");
-    // Update s_js_ready on watch
+
+	if (localStorage.settings) {
+		options = JSON.parse(localStorage.settings);
+        options.showCurrentLocationDot = options.showCurrentLocationDot === true;
+		options.updateIntervalMs *= 1;
+		options.zoomLevel *= 1;
+        options.gpxPoints = options.gpxPoints || [];
+        Object.assign(config, options);
+        console.log("Loaded settings from localStorage: " + JSON.stringify(config));
+	}
 
     var dict = {
         cmd: 1,
@@ -488,31 +489,50 @@ Pebble.addEventListener('showConfiguration', function(e) {
 });
 
 Pebble.addEventListener('webviewclosed', function (e) {
-	console.log('webview closed');
-	if (e && e.response) {
-		var newSettings = clay.getSettings(e.response, false);
-		config.showCurrentLocationDot = newSettings.showCurentLocationDot.value;
-		config.tileProvider = newSettings.tileProvider.value;
-		config.updateIntervalMs = newSettings.updateIntervalMs.value * 1;
-		config.zoomLevel = newSettings.zoomLevel.value * 1;
-        // gpx stuff
+    if (!e || !e.response) {
+        return;
+    }
+    var newSettings = clay.getSettings(e.response, false);
+    config.showCurrentLocationDot = newSettings.showCurrentLocationDot.value;
+    config.tileProvider = newSettings.tileProvider.value;
+    if (newSettings.updateIntervalMs) {
+        config.updateIntervalMs = newSettings.updateIntervalMs.value * 1;
+    }
+    config.zoomLevel = newSettings.zoomLevel.value * 1;
+    // gpx stuff
+    if (newSettings.gpxTrackColor) {
         config.gpxTrackColor = newSettings.gpxTrackColor.value;
-		gpxState.points = [];
-        if (newSettings.GPX_URL.value) {
-            fetch(newSettings.GPX_URL.value)
-                .then(response => response.text())
-                .then(gpxText => {
-                    gpxState.points = parseGpxTrackPoints(gpxText);
-                })
-                .catch(err => {
-                    console.log("Failed to fetch GPX file: " + JSON.stringify(err));
-                });
-        } else if (newSettings.GPX_TEXT.value) {
-            gpxState.points = parseGpxTrackPoints(newSettings.GPX_TEXT.value);
-        }
-		localStorage.settings = JSON.stringify(config);
-
+    } else {
+        config.gpxTrackColor = 255;
+    }
+    config.gpxPoints = [];
+    if (newSettings.gpxUrl.value && newSettings.gpxUrl.value.trim() !== "") {
+        console.log("GPX URL provided, fetching: " + newSettings.gpxUrl.value);
+        var url = newSettings.gpxUrl.value.trim();
+        var request = new XMLHttpRequest();
+        request.open('GET', url, true);
+        request.onload = function() {
+            if (request.status >= 200 && request.status < 400) {
+                // Success!
+                var gpxText = request.responseText;
+                parseGpxTrackPointsAndSave(gpxText);
+                renderTileToWatch();
+            } else {
+                console.log("Failed to fetch GPX file, status: " + request.status);
+            }
+        };
+        request.onerror = function() {
+            console.log("Error fetching GPX file");
+        };
+        request.send();
+    } else if (newSettings.gpxText.value && newSettings.gpxText.value.trim() !== "") {
+        console.log("GPX Text provided, parsing");
+        parseGpxTrackPointsAndSave(newSettings.gpxText.value);
         renderTileToWatch();
-		resetTimers();
-	}
+    } else {
+        console.log("No GPX data provided");
+        renderTileToWatch();
+        localStorage.settings = JSON.stringify(config);
+    }
+    console.log("New settings: " + JSON.stringify(newSettings));
 });
