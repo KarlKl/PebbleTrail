@@ -1,5 +1,9 @@
 try {
-  require("./env.js");
+  const env = require("./env");
+
+  var geo = require("./geo");
+  var imagePacking = require("./imagePacking");
+  var createTileCache = require("./tileCache").createTileCache;
 
   // Import the Clay package
   var Clay = require("@rebble/clay");
@@ -8,13 +12,12 @@ try {
   // Initialize Clay
   var clay = new Clay(clayConfig, null, { autoHandleEvents: false });
 } catch (e) {
-  console.log("Could not load dependencies");
+  console.log("Could not load dependencies " + JSON.stringify(e));
 }
 
 const INIT_LAT = 48.3067582;
 const INIT_LON = 14.2861719;
 const CHUNK_SIZE = 7 * 1024;
-const LUMINANCE_THRESHOLD = 190; // higher = more likely to be black, lower = more likely to be white
 const TILE_CACHE_TTL_MS = 5 * 60 * 1000;
 const TILE_CACHE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const TILE_CACHE_MAX_ENTRIES = 64;
@@ -40,7 +43,7 @@ var tileUrls = {
 
 // initial configuration values, can be overridden by saved settings in localStorage or by the configuration page
 var config = {
-  tileProvider: Feature.color("osm", "stamen_toner"),
+  tileProvider: undefined,
   updateIntervalMs: 15000,
   zoomLevel: 16,
   showCurrentLocationDot: true,
@@ -69,199 +72,12 @@ var gpsState = {
 };
 
 var canvasContext = null;
-var tileCache = {};
-var tileCacheLastCleanup = 0;
-
-function getTileCacheKey(provider, zoom, x, y) {
-  return provider + ":" + zoom + ":" + x + ":" + y;
-}
-
-function evictTileCacheEntry(cacheKey) {
-  delete tileCache[cacheKey];
-}
-
-function cleanupTileCache(force) {
-  var now = Date.now();
-  if (!force && now - tileCacheLastCleanup < TILE_CACHE_CLEANUP_INTERVAL_MS) {
-    return;
-  }
-
-  tileCacheLastCleanup = now;
-
-  var keys = Object.keys(tileCache);
-  for (var i = 0; i < keys.length; i++) {
-    var cacheKey = keys[i];
-    var entry = tileCache[cacheKey];
-    if (!entry) {
-      continue;
-    }
-    if (entry.status === "loaded" && entry.expiresAt <= now) {
-      evictTileCacheEntry(cacheKey);
-    }
-  }
-
-  keys = Object.keys(tileCache);
-  if (keys.length <= TILE_CACHE_MAX_ENTRIES) {
-    return;
-  }
-
-  keys = keys.filter(function (cacheKey) {
-    return tileCache[cacheKey] && tileCache[cacheKey].status === "loaded";
-  });
-  keys.sort(function (left, right) {
-    var leftEntry = tileCache[left];
-    var rightEntry = tileCache[right];
-    return (leftEntry.lastAccess || 0) - (rightEntry.lastAccess || 0);
-  });
-
-  while (Object.keys(tileCache).length > TILE_CACHE_MAX_ENTRIES && keys.length) {
-    evictTileCacheEntry(keys.shift());
-  }
-}
-
-function loadTileImage(provider, zoom, x, y, onLoad, onError) {
-  var cacheKey = getTileCacheKey(provider, zoom, x, y);
-  var now = Date.now();
-  var entry = tileCache[cacheKey];
-
-  cleanupTileCache(false);
-
-  if (entry && entry.status === "loaded" && entry.expiresAt > now) {
-    entry.lastAccess = now;
-    onLoad(entry.image);
-    return;
-  }
-
-  if (entry && entry.status === "loading") {
-    entry.waiters.push({
-      onLoad: onLoad,
-      onError: onError,
-    });
-    return;
-  }
-
-  evictTileCacheEntry(cacheKey);
-
-  var img = new Image();
-  entry = {
-    image: img,
-    status: "loading",
-    waiters: [
-      {
-        onLoad: onLoad,
-        onError: onError,
-      },
-    ],
-    lastAccess: now,
-    expiresAt: now + TILE_CACHE_TTL_MS,
-  };
-  tileCache[cacheKey] = entry;
-
-  img.crossOrigin = "Anonymous";
-  img.onload = function () {
-    var readyEntry = tileCache[cacheKey];
-    var callbackNow = Date.now();
-    if (!readyEntry) {
-      return;
-    }
-
-    readyEntry.status = "loaded";
-    readyEntry.lastAccess = callbackNow;
-    readyEntry.expiresAt = callbackNow + TILE_CACHE_TTL_MS;
-
-    var waiters = readyEntry.waiters.slice();
-    readyEntry.waiters.length = 0;
-
-    for (var waiterIndex = 0; waiterIndex < waiters.length; waiterIndex++) {
-      waiters[waiterIndex].onLoad(readyEntry.image);
-    }
-  };
-
-  img.onerror = function () {
-    var failedEntry = tileCache[cacheKey];
-    var waiters = failedEntry ? failedEntry.waiters.slice() : [];
-    evictTileCacheEntry(cacheKey);
-
-    for (var waiterIndex = 0; waiterIndex < waiters.length; waiterIndex++) {
-      waiters[waiterIndex].onError();
-    }
-  };
-
-  img.src = getTileUrl(provider, zoom, x, y);
-}
-
-setInterval(function () {
-  cleanupTileCache(false);
-}, TILE_CACHE_CLEANUP_INTERVAL_MS);
-
-function long2tileFloat(lon, zoom) {
-  return ((lon + 180) / 360) * Math.pow(2, zoom);
-}
-
-function lat2tileFloat(lat, zoom) {
-  var latRad = deg2rad(lat);
-  return (
-    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) *
-    Math.pow(2, zoom)
-  );
-}
-
-function mod(n, m) {
-  return ((n % m) + m) % m;
-}
-
-function quantize2(value) {
-  var v = Math.floor((value + 42) / 85);
-  if (v < 0) {
-    return 0;
-  }
-  if (v > 3) {
-    return 3;
-  }
-  return v;
-}
-
-function rgbaToPebbleColor(r, g, b) {
-  var r2 = quantize2(r);
-  var g2 = quantize2(g);
-  var b2 = quantize2(b);
-  return 0xc0 | (r2 << 4) | (g2 << 2) | b2;
-}
-
-function packMonochrome(imageData, width, height, bytesPerRow) {
-  var packed = new Uint8Array(bytesPerRow * height);
-  var data = imageData.data;
-
-  for (var y = 0; y < height; y++) {
-    for (var x = 0; x < width; x++) {
-      var idx = (y * width + x) * 4;
-      var r = data[idx];
-      var g = data[idx + 1];
-      var b = data[idx + 2];
-      var luminance = r * 0.2126 + g * 0.7152 + b * 0.0722;
-      var bit = luminance > LUMINANCE_THRESHOLD ? 1 : 0;
-      if (bit) {
-        var byteIndex = y * bytesPerRow + (x >> 3);
-        var bitIndex = 7 - (x & 7);
-        packed[byteIndex] |= 1 << bitIndex;
-      }
-    }
-  }
-
-  return packed;
-}
-
-function packColor(imageData, width, height) {
-  var packed = new Uint8Array(width * height);
-  var data = imageData.data;
-  var outIdx = 0;
-
-  for (var i = 0; i < data.length; i += 4) {
-    packed[outIdx++] = rgbaToPebbleColor(data[i], data[i + 1], data[i + 2]);
-  }
-
-  return packed;
-}
+var tileCache = createTileCache({
+  ttlMs: TILE_CACHE_TTL_MS,
+  cleanupIntervalMs: TILE_CACHE_CLEANUP_INTERVAL_MS,
+  maxEntries: TILE_CACHE_MAX_ENTRIES,
+  buildUrl: getTileUrl,
+});
 
 function sendNextChunk() {
   if (!renderState.sendData) {
@@ -322,7 +138,7 @@ function renderTileToWatch() {
     console.log("Canvas API unavailable in PKJS environment");
     return;
   }
-  cleanupTileCache(false);
+  tileCache.cleanup(false);
   var width = renderState.width;
   var height = renderState.height;
   var outputIsColor = renderState.isColor && !config.enforceMonochrome;
@@ -350,8 +166,8 @@ function renderTileToWatch() {
     canvasContext.clearRect(0, 0, width, height);
   }
 
-  var centerTileX = long2tileFloat(gpsState.longitude, zoom);
-  var centerTileY = lat2tileFloat(gpsState.latitude, zoom);
+  var centerTileX = geo.long2tileFloat(gpsState.longitude, zoom);
+  var centerTileY = geo.lat2tileFloat(gpsState.latitude, zoom);
   var centerWorldX = centerTileX * tileSize;
   var centerWorldY = centerTileY * tileSize;
   var topLeftWorldX = centerWorldX - width / 2;
@@ -371,7 +187,7 @@ function renderTileToWatch() {
       jobs.push({
         drawX: tileX * tileSize - topLeftWorldX,
         drawY: tileY * tileSize - topLeftWorldY,
-        srcX: mod(tileX, tileCount),
+        srcX: geo.mod(tileX, tileCount),
         srcY: tileY,
       });
     }
@@ -407,8 +223,8 @@ function renderTileToWatch() {
         config.gpxTrackColor || "rgba(0, 0, 255, 0.8)";
       canvasContext.lineWidth = 3;
       config.gpxPoints.forEach((pt) => {
-        var tileX = long2tileFloat(pt.lon, zoom);
-        var tileY = lat2tileFloat(pt.lat, zoom);
+        var tileX = geo.long2tileFloat(pt.lon, zoom);
+        var tileY = geo.lat2tileFloat(pt.lat, zoom);
         var worldX = tileX * tileSize;
         var worldY = tileY * tileSize;
         var x = worldX - topLeftWorldX;
@@ -431,8 +247,13 @@ function renderTileToWatch() {
 
     var imageData = canvasContext.getImageData(0, 0, width, height);
     var packed = outputIsColor
-      ? packColor(imageData, width, height)
-      : packMonochrome(imageData, width, height, outputBytesPerRow);
+      ? imagePacking.packColor(imageData, width, height)
+      : imagePacking.packMonochrome(
+          imageData,
+          width,
+          height,
+          outputBytesPerRow
+        );
 
     renderState.outputIsColor = outputIsColor;
     renderState.outputBytesPerRow = outputBytesPerRow;
@@ -443,22 +264,29 @@ function renderTileToWatch() {
   }
 
   function loadAndDrawTile(job) {
-    loadTileImage(
+    tileCache.load(
       config.tileProvider,
       zoom,
       job.srcX,
       job.srcY,
       function (img) {
-      if (thisRenderToken !== renderState.renderToken) {
-        return;
-      }
-      canvasContext.drawImage(img, job.drawX, job.drawY, tileSize, tileSize);
-      loaded += 1;
-      finalizeJob();
+        if (thisRenderToken !== renderState.renderToken) {
+          return;
+        }
+        canvasContext.drawImage(img, job.drawX, job.drawY, tileSize, tileSize);
+        loaded += 1;
+        finalizeJob();
       },
       function () {
         console.log(
-          "Failed to load tile provider=" + config.tileProvider + " z=" + zoom + " x=" + job.srcX + " y=" + job.srcY
+          "Failed to load tile provider=" +
+            config.tileProvider +
+            " z=" +
+            zoom +
+            " x=" +
+            job.srcX +
+            " y=" +
+            job.srcY
         );
         finalizeJob();
       }
@@ -476,26 +304,7 @@ function getTileUrl(provider, zoom, x, y) {
     .replace("{z}", zoom)
     .replace("{x}", x)
     .replace("{y}", y)
-    .replace("{STADIAMAPS_API_KEY}", STADIAMAPS_API_KEY);
-}
-
-function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
-  var R = 6371000; // Radius of the earth in meters
-  var dLat = deg2rad(lat2 - lat1);
-  var dLon = deg2rad(lon2 - lon1);
-  var a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(deg2rad(lat1)) *
-      Math.cos(deg2rad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  var distance = R * c; // Distance in meters
-  return distance;
-}
-
-function deg2rad(deg) {
-  return deg * (Math.PI / 180);
+    .replace("{STADIAMAPS_API_KEY}", env.STADIAMAPS_API_KEY);
 }
 
 /**
@@ -547,6 +356,10 @@ Pebble.addEventListener("appmessage", function (e) {
     renderState.bytesPerRow = payload.bytes_per_row;
     renderState.isColor = payload.is_color === 1;
 
+    if (!config.tileProvider === undefined) {
+      config.tileProvider = renderState.isColor ? "osm" : "stamen_toner";
+    }
+
     console.log(
       "Rendering map for " +
         renderState.width +
@@ -576,7 +389,7 @@ Pebble.addEventListener("appmessage", function (e) {
 
 Pebble.addEventListener("ready", function () {
   console.log("PKJS ready, waiting for watch request");
-  cleanupTileCache(true);
+  tileCache.cleanup(true);
 
   if (localStorage.settings) {
     console.log("Found saved settings in localStorage, loading");
@@ -613,7 +426,7 @@ if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       function (position) {
         // update watch if changed significantly (more than 10m)
-        var distance = getDistanceFromLatLonInMeters(
+        var distance = geo.getDistanceFromLatLonInMeters(
           gpsState.latitude,
           gpsState.longitude,
           position.coords.latitude,

@@ -60,7 +60,7 @@ module.exports = [
         "type": "toggle",
         "messageKey": "enforceMonochrome",
         "defaultValue": false,
-        "label": "Black & White Tiles",
+        "label": "Black &amp; White Tiles",
         "capabilities": ["COLOR"]
       },
       {
