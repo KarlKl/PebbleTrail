@@ -15,6 +15,9 @@ const INIT_LAT = 48.3067582;
 const INIT_LON = 14.2861719;
 const CHUNK_SIZE = 7 * 1024;
 const LUMINANCE_THRESHOLD = 190; // higher = more likely to be black, lower = more likely to be white
+const TILE_CACHE_TTL_MS = 5 * 60 * 1000;
+const TILE_CACHE_CLEANUP_INTERVAL_MS = 60 * 1000;
+const TILE_CACHE_MAX_ENTRIES = 64;
 const BTN_UP = 1;
 const BTN_SELECT = 2;
 const BTN_DOWN = 3;
@@ -35,9 +38,9 @@ var tileUrls = {
     "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png?api_key={STADIAMAPS_API_KEY}",
 };
 
-// Configuration
+// initial configuration values, can be overridden by saved settings in localStorage or by the configuration page
 var config = {
-  tileProvider: "osm",
+  tileProvider: Feature.color("osm", "stamen_toner"),
   updateIntervalMs: 15000,
   zoomLevel: 16,
   showCurrentLocationDot: true,
@@ -66,6 +69,130 @@ var gpsState = {
 };
 
 var canvasContext = null;
+var tileCache = {};
+var tileCacheLastCleanup = 0;
+
+function getTileCacheKey(provider, zoom, x, y) {
+  return provider + ":" + zoom + ":" + x + ":" + y;
+}
+
+function evictTileCacheEntry(cacheKey) {
+  delete tileCache[cacheKey];
+}
+
+function cleanupTileCache(force) {
+  var now = Date.now();
+  if (!force && now - tileCacheLastCleanup < TILE_CACHE_CLEANUP_INTERVAL_MS) {
+    return;
+  }
+
+  tileCacheLastCleanup = now;
+
+  var keys = Object.keys(tileCache);
+  for (var i = 0; i < keys.length; i++) {
+    var cacheKey = keys[i];
+    var entry = tileCache[cacheKey];
+    if (!entry) {
+      continue;
+    }
+    if (entry.status === "loaded" && entry.expiresAt <= now) {
+      evictTileCacheEntry(cacheKey);
+    }
+  }
+
+  keys = Object.keys(tileCache);
+  if (keys.length <= TILE_CACHE_MAX_ENTRIES) {
+    return;
+  }
+
+  keys = keys.filter(function (cacheKey) {
+    return tileCache[cacheKey] && tileCache[cacheKey].status === "loaded";
+  });
+  keys.sort(function (left, right) {
+    var leftEntry = tileCache[left];
+    var rightEntry = tileCache[right];
+    return (leftEntry.lastAccess || 0) - (rightEntry.lastAccess || 0);
+  });
+
+  while (Object.keys(tileCache).length > TILE_CACHE_MAX_ENTRIES && keys.length) {
+    evictTileCacheEntry(keys.shift());
+  }
+}
+
+function loadTileImage(provider, zoom, x, y, onLoad, onError) {
+  var cacheKey = getTileCacheKey(provider, zoom, x, y);
+  var now = Date.now();
+  var entry = tileCache[cacheKey];
+
+  cleanupTileCache(false);
+
+  if (entry && entry.status === "loaded" && entry.expiresAt > now) {
+    entry.lastAccess = now;
+    onLoad(entry.image);
+    return;
+  }
+
+  if (entry && entry.status === "loading") {
+    entry.waiters.push({
+      onLoad: onLoad,
+      onError: onError,
+    });
+    return;
+  }
+
+  evictTileCacheEntry(cacheKey);
+
+  var img = new Image();
+  entry = {
+    image: img,
+    status: "loading",
+    waiters: [
+      {
+        onLoad: onLoad,
+        onError: onError,
+      },
+    ],
+    lastAccess: now,
+    expiresAt: now + TILE_CACHE_TTL_MS,
+  };
+  tileCache[cacheKey] = entry;
+
+  img.crossOrigin = "Anonymous";
+  img.onload = function () {
+    var readyEntry = tileCache[cacheKey];
+    var callbackNow = Date.now();
+    if (!readyEntry) {
+      return;
+    }
+
+    readyEntry.status = "loaded";
+    readyEntry.lastAccess = callbackNow;
+    readyEntry.expiresAt = callbackNow + TILE_CACHE_TTL_MS;
+
+    var waiters = readyEntry.waiters.slice();
+    readyEntry.waiters.length = 0;
+
+    for (var waiterIndex = 0; waiterIndex < waiters.length; waiterIndex++) {
+      waiters[waiterIndex].onLoad(readyEntry.image);
+    }
+  };
+
+  img.onerror = function () {
+    var failedEntry = tileCache[cacheKey];
+    var waiters = failedEntry ? failedEntry.waiters.slice() : [];
+    evictTileCacheEntry(cacheKey);
+
+    for (var waiterIndex = 0; waiterIndex < waiters.length; waiterIndex++) {
+      waiters[waiterIndex].onError();
+    }
+  };
+
+  img.src = getTileUrl(provider, zoom, x, y);
+}
+
+setInterval(function () {
+  cleanupTileCache(false);
+}, TILE_CACHE_CLEANUP_INTERVAL_MS);
 
 function long2tileFloat(lon, zoom) {
   return ((lon + 180) / 360) * Math.pow(2, zoom);
@@ -195,6 +322,7 @@ function renderTileToWatch() {
     console.log("Canvas API unavailable in PKJS environment");
     return;
   }
+  cleanupTileCache(false);
   var width = renderState.width;
   var height = renderState.height;
   var outputIsColor = renderState.isColor && !config.enforceMonochrome;
@@ -315,25 +443,26 @@ function renderTileToWatch() {
   }
 
   function loadAndDrawTile(job) {
-    var img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.onload = function () {
+    loadTileImage(
+      config.tileProvider,
+      zoom,
+      job.srcX,
+      job.srcY,
+      function (img) {
       if (thisRenderToken !== renderState.renderToken) {
         return;
       }
       canvasContext.drawImage(img, job.drawX, job.drawY, tileSize, tileSize);
       loaded += 1;
       finalizeJob();
-    };
-
-    img.onerror = function () {
-      console.log(
-        "Failed to load tile z=" + zoom + " x=" + job.srcX + " y=" + job.srcY
-      );
-      finalizeJob();
-    };
-
-    img.src = getTileUrl(config.tileProvider, zoom, job.srcX, job.srcY);
+      },
+      function () {
+        console.log(
+          "Failed to load tile provider=" + config.tileProvider + " z=" + zoom + " x=" + job.srcX + " y=" + job.srcY
+        );
+        finalizeJob();
+      }
+    );
   }
 
   for (var i = 0; i < jobs.length; i++) {
@@ -447,6 +576,7 @@ Pebble.addEventListener("appmessage", function (e) {
 
 Pebble.addEventListener("ready", function () {
   console.log("PKJS ready, waiting for watch request");
+  cleanupTileCache(true);
 
   if (localStorage.settings) {
     console.log("Found saved settings in localStorage, loading");
