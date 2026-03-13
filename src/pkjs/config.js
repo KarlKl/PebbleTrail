@@ -41,6 +41,40 @@ module.exports = [
         "min": 10,
         "max": 20,
         "step": 1
+      },
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Performance"
+      },
+      {
+        "type": "text",
+        "defaultValue": "You can switch to black and white rendering to speed up tile rendering and save battery.",
+        "capabilities": ["COLOR"]
+      },
+      {
+        "type": "toggle",
+        "messageKey": "enforceMonochrome",
+        "defaultValue": false,
+        "label": "Black & White Tiles",
+        "capabilities": ["COLOR"]
+      },
+      {
+        "type": "text",
+        "defaultValue": "The watchface will fetch new map tiles at the interval you specify here. Setting a shorter interval will make the watchface more responsive to location changes, but will also consume more battery and data."
+      },
+      {
+        "type": "slider",
+        "messageKey": "updateIntervalSeconds",
+        "defaultValue": 60,
+        "label": "Tile Update Interval (seconds)",
+        "min": 10,
+        "max": 300,
+        "step": 10
       }
     ]
   },
