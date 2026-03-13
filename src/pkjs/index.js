@@ -1,9 +1,10 @@
 try {
-  const env = require("./env");
-
   var geo = require("./geo");
   var imagePacking = require("./imagePacking");
   var createTileCache = require("./tileCache").createTileCache;
+  var createTileRenderer = require("./tileRenderer").createTileRenderer;
+  var getTileUrl = require("./tileUrl").getTileUrl;
+  var gpx = require("./gpx");
 
   // Import the Clay package
   var Clay = require("@rebble/clay");
@@ -29,18 +30,6 @@ const CMD_INIT = 1;
 const CMD_IMAGE_CHUNK = 2;
 const CMD_BUTTON_CLICK = 3;
 
-var tileUrls = {
-  osm: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-  osm_cyclosm:
-    "https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
-  stamen_watercolor:
-    "https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.png?api_key={STADIAMAPS_API_KEY}",
-  stamen_toner:
-    "https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}.png?api_key={STADIAMAPS_API_KEY}",
-  stamen_terrain:
-    "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png?api_key={STADIAMAPS_API_KEY}",
-};
-
 // initial configuration values, can be overridden by saved settings in localStorage or by the configuration page
 var config = {
   tileProvider: undefined,
@@ -61,7 +50,6 @@ var renderState = {
   sendData: null,
   sendIndex: 0,
   totalBytes: 0,
-  renderToken: 0,
 };
 
 var gpsState = {
@@ -71,12 +59,16 @@ var gpsState = {
   timestamp: 0,
 };
 
-var canvasContext = null;
 var tileCache = createTileCache({
   ttlMs: TILE_CACHE_TTL_MS,
   cleanupIntervalMs: TILE_CACHE_CLEANUP_INTERVAL_MS,
   maxEntries: TILE_CACHE_MAX_ENTRIES,
   buildUrl: getTileUrl,
+});
+var tileRenderer = createTileRenderer({
+  geo: geo,
+  imagePacking: imagePacking,
+  tileCache: tileCache,
 });
 
 function sendNextChunk() {
@@ -119,219 +111,39 @@ function sendNextChunk() {
   );
 }
 
-function initCanvas(width, height) {
-  try {
-    canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    if (document.getElementById("canvasDebug")) {
-      document.getElementById("canvasDebug").appendChild(canvas);
-    }
-    return canvas.getContext("2d");
-  } catch (ex) {
-    canvas = {};
-  }
-}
-
 function renderTileToWatch() {
-  if (typeof document === "undefined" || !document.createElement) {
-    console.log("Canvas API unavailable in PKJS environment");
-    return;
-  }
-  tileCache.cleanup(false);
-  var width = renderState.width;
-  var height = renderState.height;
-  var outputIsColor = renderState.isColor && !config.enforceMonochrome;
-  var outputBytesPerRow = outputIsColor ? width : (width + 7) >> 3;
-  var zoom = config.zoomLevel;
-  var tileSize = 256;
-  var tileCount = Math.pow(2, zoom);
-
-  renderState.renderToken += 1;
-  var thisRenderToken = renderState.renderToken;
-
-  if (!canvasContext) {
-    canvasContext = initCanvas(width, height);
-  } else if (
-    canvasContext.canvas &&
-    (canvasContext.canvas.width !== width ||
-      canvasContext.canvas.height !== height)
-  ) {
-    canvasContext.canvas.width = width;
-    canvasContext.canvas.height = height;
-  }
-
-  if (canvasContext.clearRect) {
-    // Clear previous frame before drawing newly fetched tiles.
-    canvasContext.clearRect(0, 0, width, height);
-  }
-
-  var centerTileX = geo.long2tileFloat(gpsState.longitude, zoom);
-  var centerTileY = geo.lat2tileFloat(gpsState.latitude, zoom);
-  var centerWorldX = centerTileX * tileSize;
-  var centerWorldY = centerTileY * tileSize;
-  var topLeftWorldX = centerWorldX - width / 2;
-  var topLeftWorldY = centerWorldY - height / 2;
-
-  var minTileX = Math.floor(topLeftWorldX / tileSize);
-  var minTileY = Math.floor(topLeftWorldY / tileSize);
-  var maxTileX = Math.floor((topLeftWorldX + width - 1) / tileSize);
-  var maxTileY = Math.floor((topLeftWorldY + height - 1) / tileSize);
-
-  var jobs = [];
-  for (var tileY = minTileY; tileY <= maxTileY; tileY++) {
-    if (tileY < 0 || tileY >= tileCount) {
-      continue;
-    }
-    for (var tileX = minTileX; tileX <= maxTileX; tileX++) {
-      jobs.push({
-        drawX: tileX * tileSize - topLeftWorldX,
-        drawY: tileY * tileSize - topLeftWorldY,
-        srcX: geo.mod(tileX, tileCount),
-        srcY: tileY,
-      });
-    }
-  }
-
-  if (jobs.length === 0) {
-    console.log("No tiles cover requested viewport");
-    return;
-  }
-
-  var pending = jobs.length;
-  var loaded = 0;
-
-  function finalizeJob() {
-    if (thisRenderToken !== renderState.renderToken) {
-      return;
-    }
-
-    pending -= 1;
-    if (pending > 0) {
-      return;
-    }
-
-    if (loaded === 0) {
-      console.log("Failed to load all map tiles");
-      return;
-    }
-
-    // draw gpx track points, if any
-    if (config.gpxPoints.length > 0) {
-      canvasContext.beginPath();
-      canvasContext.strokeStyle =
-        config.gpxTrackColor || "rgba(0, 0, 255, 0.8)";
-      canvasContext.lineWidth = 3;
-      config.gpxPoints.forEach((pt) => {
-        var tileX = geo.long2tileFloat(pt.lon, zoom);
-        var tileY = geo.lat2tileFloat(pt.lat, zoom);
-        var worldX = tileX * tileSize;
-        var worldY = tileY * tileSize;
-        var x = worldX - topLeftWorldX;
-        var y = worldY - topLeftWorldY;
-
-        canvasContext.lineTo(x, y);
-      });
-      canvasContext.stroke();
-    }
-
-    // draw gps dot
-    if (config.showCurrentLocationDot) {
-      var gpsDotX = centerTileX * tileSize - topLeftWorldX;
-      var gpsDotY = centerTileY * tileSize - topLeftWorldY;
-      canvasContext.beginPath();
-      canvasContext.arc(gpsDotX, gpsDotY, 4, 0, 2 * Math.PI);
-      canvasContext.fillStyle = "rgba(255, 0, 0, 0.8)";
-      canvasContext.fill();
-    }
-
-    var imageData = canvasContext.getImageData(0, 0, width, height);
-    var packed = outputIsColor
-      ? imagePacking.packColor(imageData, width, height)
-      : imagePacking.packMonochrome(
-          imageData,
-          width,
-          height,
-          outputBytesPerRow
-        );
-
-    renderState.outputIsColor = outputIsColor;
-    renderState.outputBytesPerRow = outputBytesPerRow;
-    renderState.sendData = packed;
-    renderState.sendIndex = 0;
-    renderState.totalBytes = packed.length;
-    sendNextChunk();
-  }
-
-  function loadAndDrawTile(job) {
-    tileCache.load(
-      config.tileProvider,
-      zoom,
-      job.srcX,
-      job.srcY,
-      function (img) {
-        if (thisRenderToken !== renderState.renderToken) {
-          return;
-        }
-        canvasContext.drawImage(img, job.drawX, job.drawY, tileSize, tileSize);
-        loaded += 1;
-        finalizeJob();
-      },
-      function () {
-        console.log(
-          "Failed to load tile provider=" +
-            config.tileProvider +
-            " z=" +
-            zoom +
-            " x=" +
-            job.srcX +
-            " y=" +
-            job.srcY
-        );
-        finalizeJob();
-      }
-    );
-  }
-
-  for (var i = 0; i < jobs.length; i++) {
-    loadAndDrawTile(jobs[i]);
-  }
+  tileRenderer.render({
+    renderState: renderState,
+    config: config,
+    gpsState: gpsState,
+    onFrameReady: function (frame) {
+      renderState.outputIsColor = frame.outputIsColor;
+      renderState.outputBytesPerRow = frame.outputBytesPerRow;
+      renderState.sendData = frame.packed;
+      renderState.sendIndex = 0;
+      renderState.totalBytes = frame.packed.length;
+      sendNextChunk();
+    },
+  });
 }
 
-function getTileUrl(provider, zoom, x, y) {
-  var template = tileUrls[provider];
-  return template
-    .replace("{z}", zoom)
-    .replace("{x}", x)
-    .replace("{y}", y)
-    .replace("{STADIAMAPS_API_KEY}", env.STADIAMAPS_API_KEY);
+function saveSettings() {
+  localStorage.settings = JSON.stringify(config);
 }
 
-/**
- * Parses a GPX string and extracts all track points (<trkpt>).
- * @param {string} gpxString - The GPX file content as a string.
- * @returns {Array<Object>} - Array of track points with lat, lon, ele, and time.
- */
+function setGpxPoints(points) {
+  config.gpxPoints = points;
+  saveSettings();
+}
+
 function parseGpxTrackPointsAndSave(gpxString) {
-  const parser = new DOMParser();
-  const xmlDoc = parser.parseFromString(gpxString, "text/xml");
-  const trkpts = xmlDoc.getElementsByTagName("trkpt");
-
   var points = [];
   try {
-    points = Array.from(trkpts).map((trkpt) => {
-      var eleElem = trkpt.getElementsByTagName("ele")[0];
-      var timeElem = trkpt.getElementsByTagName("time")[0];
-      return {
-        lat: parseFloat(trkpt.getAttribute("lat")),
-        lon: parseFloat(trkpt.getAttribute("lon")),
-        ele: eleElem ? parseFloat(eleElem.textContent) : null,
-        time: timeElem ? timeElem.textContent : null,
-      };
-    });
+    points = gpx.parseGpxTrackPoints(gpxString);
   } catch (err) {
     console.log("Error parsing GPX track points: " + JSON.stringify(err));
   }
+
   if (points.length > 0) {
     console.log(
       "Parsed " +
@@ -342,8 +154,8 @@ function parseGpxTrackPointsAndSave(gpxString) {
   } else {
     console.log("No GPX track points found in provided data");
   }
-  config.gpxPoints = points;
-  localStorage.settings = JSON.stringify(config);
+
+  setGpxPoints(points);
   return points;
 }
 
@@ -356,7 +168,7 @@ Pebble.addEventListener("appmessage", function (e) {
     renderState.bytesPerRow = payload.bytes_per_row;
     renderState.isColor = payload.is_color === 1;
 
-    if (!config.tileProvider === undefined) {
+    if (config.tileProvider === undefined) {
       config.tileProvider = renderState.isColor ? "osm" : "stamen_toner";
     }
 
@@ -518,7 +330,7 @@ Pebble.addEventListener("webviewclosed", function (e) {
   } else {
     console.log("No GPX data provided");
     renderTileToWatch();
-    localStorage.settings = JSON.stringify(config);
+    saveSettings();
   }
   console.log("New settings: " + JSON.stringify(newSettings));
 });
