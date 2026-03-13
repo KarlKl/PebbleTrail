@@ -1,13 +1,18 @@
 <!doctype html>
 <html>
+
 <head>
 	<meta charset="utf-8">
 	<title>PebbleTrail Test App</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
 	<style type="text/css">
-		body { background: #000; color: #fff; }
+		body {
+			background: #000;
+			color: #fff;
+		}
 	</style>
 </head>
+
 <body>
 	<div id="canvasDebug"></div>
 	<div id="canvasDebugOutput">
@@ -18,10 +23,10 @@
 		Pebble = {
 			_events: [],
 			fake: true,
-			addEventListener: function(event, fun) {
+			addEventListener: function (event, fun) {
 				this._events[event] = fun;
 			},
-			sendAppMessage: function(obj, success) {
+			sendAppMessage: function (obj, success) {
 				//console.log('fake sending data to pebble');
 				setTimeout(success, 50);
 				// display data that will be rendered on watch
@@ -71,7 +76,7 @@
 			}
 		};
 
-		setTimeout(function() {
+		setTimeout(function () {
 			Pebble._events['ready'] && Pebble._events['ready']();
 		}, 100);
 		setTimeout(() => {
@@ -106,4 +111,5 @@
 
 	<button onclick="parseGpxTrackPointsAndSave(prompt('Paste GPX data here')); renderTileToWatch();">Load GPX</button>
 </body>
+
 </html>

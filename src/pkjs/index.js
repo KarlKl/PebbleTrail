@@ -27,9 +27,12 @@ var tileUrls = {
   osm: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
   osm_cyclosm:
     "https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
-  stamen_watercolor: `https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.png?api_key={STADIAMAPS_API_KEY}`,
-  stamen_toner: `https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}.png?api_key={STADIAMAPS_API_KEY}`,
-  stamen_terrain: `https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png?api_key={STADIAMAPS_API_KEY}`,
+  stamen_watercolor:
+    "https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.png?api_key={STADIAMAPS_API_KEY}",
+  stamen_toner:
+    "https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}.png?api_key={STADIAMAPS_API_KEY}",
+  stamen_terrain:
+    "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png?api_key={STADIAMAPS_API_KEY}",
 };
 
 // Configuration
@@ -47,6 +50,8 @@ var renderState = {
   height: 0,
   bytesPerRow: 0,
   isColor: false,
+  outputBytesPerRow: 0,
+  outputIsColor: false,
   sendData: null,
   sendIndex: 0,
   totalBytes: 0,
@@ -61,38 +66,6 @@ var gpsState = {
 };
 
 var canvasContext = null;
-
-if (!window.atob) {
-  var chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-  window.atob = function (input) {
-    var str = String(input).replace(/=+$/, "");
-    if (str.length % 4 == 1) {
-      throw new Error(
-        "'atob' failed: The string to be decoded is not correctly encoded.",
-      );
-    }
-    for (
-      var bc = 0, bs, buffer, idx = 0, output = "";
-      (buffer = str.charAt(idx++));
-      ~buffer && ((bs = bc % 4 ? bs * 64 + buffer : buffer), bc++ % 4)
-        ? (output += String.fromCharCode(255 & (bs >> ((-2 * bc) & 6))))
-        : 0
-    ) {
-      buffer = chars.indexOf(buffer);
-    }
-    return output;
-  };
-}
-
-if (!window.Image) {
-  window.Image = function () {
-    var self = this;
-    setTimeout(function () {
-      self.onload && self.onload();
-    }, 500);
-  };
-}
 
 function long2tileFloat(lon, zoom) {
   return ((lon + 180) / 360) * Math.pow(2, zoom);
@@ -180,6 +153,10 @@ function sendNextChunk() {
 
   var dict = {
     cmd: 2,
+    width: renderState.width,
+    height: renderState.height,
+    bytes_per_row: renderState.outputBytesPerRow,
+    is_color: renderState.outputIsColor ? 1 : 0,
     total_bytes: renderState.totalBytes,
     chunk_index: renderState.sendIndex,
     chunk_offset: offset,
@@ -195,7 +172,7 @@ function sendNextChunk() {
     function (err) {
       console.log("Chunk send failed, retrying: " + JSON.stringify(err));
       setTimeout(sendNextChunk, 300);
-    },
+    }
   );
 }
 
@@ -220,8 +197,8 @@ function renderTileToWatch() {
   }
   var width = renderState.width;
   var height = renderState.height;
-  var bytesPerRow = renderState.bytesPerRow;
-  var isColor = renderState.isColor && !config.enforceMonochrome;
+  var outputIsColor = renderState.isColor && !config.enforceMonochrome;
+  var outputBytesPerRow = outputIsColor ? width : (width + 7) >> 3;
   var zoom = config.zoomLevel;
   var tileSize = 256;
   var tileCount = Math.pow(2, zoom);
@@ -325,10 +302,12 @@ function renderTileToWatch() {
     }
 
     var imageData = canvasContext.getImageData(0, 0, width, height);
-    var packed = isColor
+    var packed = outputIsColor
       ? packColor(imageData, width, height)
-      : packMonochrome(imageData, width, height, bytesPerRow);
+      : packMonochrome(imageData, width, height, outputBytesPerRow);
 
+    renderState.outputIsColor = outputIsColor;
+    renderState.outputBytesPerRow = outputBytesPerRow;
     renderState.sendData = packed;
     renderState.sendIndex = 0;
     renderState.totalBytes = packed.length;
@@ -349,7 +328,7 @@ function renderTileToWatch() {
 
     img.onerror = function () {
       console.log(
-        "Failed to load tile z=" + zoom + " x=" + job.srcX + " y=" + job.srcY,
+        "Failed to load tile z=" + zoom + " x=" + job.srcX + " y=" + job.srcY
       );
       finalizeJob();
     };
@@ -420,7 +399,7 @@ function parseGpxTrackPointsAndSave(gpxString) {
       "Parsed " +
         points.length +
         " GPX track points, sample: " +
-        JSON.stringify(points[0]),
+        JSON.stringify(points[0])
     );
   } else {
     console.log("No GPX track points found in provided data");
@@ -445,7 +424,7 @@ Pebble.addEventListener("appmessage", function (e) {
         "x" +
         renderState.height +
         " color=" +
-        renderState.isColor,
+        renderState.isColor
     );
     renderTileToWatch();
   } else if (payload.cmd === CMD_BUTTON_CLICK) {
@@ -492,9 +471,9 @@ Pebble.addEventListener("ready", function () {
     },
     function (err) {
       console.log(
-        "Failed to notify watch that JS is ready: " + JSON.stringify(err),
+        "Failed to notify watch that JS is ready: " + JSON.stringify(err)
       );
-    },
+    }
   );
 });
 
@@ -508,7 +487,7 @@ if (navigator.geolocation) {
           gpsState.latitude,
           gpsState.longitude,
           position.coords.latitude,
-          position.coords.longitude,
+          position.coords.longitude
         );
         if (distance < 10) {
           return;
@@ -528,12 +507,12 @@ if (navigator.geolocation) {
             " accuracy: " +
             gpsState.accuracy +
             " timestamp: " +
-            gpsState.timestamp,
+            gpsState.timestamp
         );
       },
       function (err) {
         console.log("Error getting position: " + JSON.stringify(err));
-      },
+      }
     );
   }, config.updateIntervalMs);
 } else {

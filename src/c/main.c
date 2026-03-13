@@ -12,7 +12,8 @@ static size_t s_received_bytes;
 static uint16_t s_image_width;
 static uint16_t s_image_height;
 static uint16_t s_image_row_bytes;
-static bool s_is_color;
+static bool s_device_is_color;
+static bool s_image_is_color;
 static bool s_image_ready;
 static AppTimer *s_retry_timer;
 
@@ -47,7 +48,7 @@ static void prv_request_render(void) {
   dict_write_uint16(iter, MESSAGE_KEY_width, s_image_width);
   dict_write_uint16(iter, MESSAGE_KEY_height, s_image_height);
   dict_write_uint16(iter, MESSAGE_KEY_bytes_per_row, s_image_row_bytes);
-  dict_write_uint8(iter, MESSAGE_KEY_is_color, s_is_color ? 1 : 0);
+  dict_write_uint8(iter, MESSAGE_KEY_is_color, s_device_is_color ? 1 : 0);
 
   AppMessageResult result = app_message_outbox_send();
   if(result != APP_MSG_OK) {
@@ -77,6 +78,10 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context) 
     return;
   }
   else if (cmd_t->value->uint8 == CMD_IMAGE_CHUNK) {
+    Tuple *width_t = dict_find(iter, MESSAGE_KEY_width);
+    Tuple *height_t = dict_find(iter, MESSAGE_KEY_height);
+    Tuple *row_bytes_t = dict_find(iter, MESSAGE_KEY_bytes_per_row);
+    Tuple *is_color_t = dict_find(iter, MESSAGE_KEY_is_color);
     Tuple *total_t = dict_find(iter, MESSAGE_KEY_total_bytes);
     Tuple *offset_t = dict_find(iter, MESSAGE_KEY_chunk_offset);
     Tuple *data_t = dict_find(iter, MESSAGE_KEY_chunk_data);
@@ -84,6 +89,19 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context) 
     APP_LOG(APP_LOG_LEVEL_INFO, "Received image chunk");//, offset: %d, length: %d", offset_t ? offset_t->value->uint32 : 0, data_t ? data_t->length : 0);
     if (!offset_t || !data_t) {
       return;
+    }
+
+    if (width_t) {
+      s_image_width = width_t->value->uint16;
+    }
+    if (height_t) {
+      s_image_height = height_t->value->uint16;
+    }
+    if (row_bytes_t) {
+      s_image_row_bytes = row_bytes_t->value->uint16;
+    }
+    if (is_color_t) {
+      s_image_is_color = is_color_t->value->uint8 != 0;
     }
 
     if (total_t && (!s_image_buffer || s_image_buffer_size != total_t->value->uint32)) {
@@ -141,11 +159,30 @@ static void prv_canvas_update_proc(Layer *layer, GContext *ctx) {
 
   uint8_t *fb_data = gbitmap_get_data(fb);
   const uint16_t fb_row_bytes = gbitmap_get_bytes_per_row(fb);
-  const uint16_t copy_row_bytes = s_is_color ? s_image_width : s_image_row_bytes;
-  const uint16_t safe_row_bytes = copy_row_bytes < fb_row_bytes ? copy_row_bytes : fb_row_bytes;
+  const uint16_t copy_height = s_image_height < bounds.size.h ? s_image_height : bounds.size.h;
 
-  for (int y = 0; y < s_image_height; y++) {
-    memcpy(fb_data + y * fb_row_bytes, s_image_buffer + y * s_image_row_bytes, safe_row_bytes);
+  if (s_image_is_color) {
+    const uint16_t copy_row_bytes = s_image_width;
+    const uint16_t safe_row_bytes = copy_row_bytes < fb_row_bytes ? copy_row_bytes : fb_row_bytes;
+    for (uint16_t y = 0; y < copy_height; y++) {
+      memcpy(fb_data + y * fb_row_bytes, s_image_buffer + y * s_image_row_bytes, safe_row_bytes);
+    }
+  } else if (!s_device_is_color) {
+    const uint16_t safe_row_bytes = s_image_row_bytes < fb_row_bytes ? s_image_row_bytes : fb_row_bytes;
+    for (uint16_t y = 0; y < copy_height; y++) {
+      memcpy(fb_data + y * fb_row_bytes, s_image_buffer + y * s_image_row_bytes, safe_row_bytes);
+    }
+  } else {
+    const uint16_t copy_width = s_image_width < bounds.size.w ? s_image_width : bounds.size.w;
+    for (uint16_t y = 0; y < copy_height; y++) {
+      const uint8_t *src_row = s_image_buffer + y * s_image_row_bytes;
+      uint8_t *dst_row = fb_data + y * fb_row_bytes;
+      for (uint16_t x = 0; x < copy_width; x++) {
+        const uint8_t src = src_row[x >> 3];
+        const bool bit = ((src >> (7 - (x & 7))) & 0x1) != 0;
+        dst_row[x] = bit ? 0xFF : 0xC0;
+      }
+    }
   }
 
   graphics_release_frame_buffer(ctx, fb);
@@ -167,12 +204,13 @@ static void prv_window_load(Window *window) {
 
   s_image_width = bounds.size.w;
   s_image_height = bounds.size.h;
-  s_is_color = false;
+  s_device_is_color = false;
 #if defined(PBL_COLOR)
-  s_is_color = true;
+  s_device_is_color = true;
 #endif
+  s_image_is_color = s_device_is_color;
 
-  if (s_is_color) {
+  if (s_device_is_color) {
     s_image_row_bytes = s_image_width;
   } else {
     GBitmap *temp = gbitmap_create_blank(GSize(s_image_width, s_image_height), GBitmapFormat1Bit);
