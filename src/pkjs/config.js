@@ -38,7 +38,7 @@ module.exports = [
         "messageKey": "zoomLevel",
         "defaultValue": 16,
         "label": "Start Zoom Level",
-        "min": 10,
+        "min": 0,
         "max": 20,
         "step": 1
       },

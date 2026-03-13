@@ -1,4 +1,8 @@
-var env = require("./env");
+try {
+    var env = require("./env");
+} catch (e) {
+    console.log("Could not load env variables " + JSON.stringify(e));
+}
 
 var TILE_URLS = {
   osm: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",

@@ -16,15 +16,16 @@ try {
   console.log("Could not load dependencies " + JSON.stringify(e));
 }
 
-const INIT_LAT = 48.3067582;
-const INIT_LON = 14.2861719;
 const CHUNK_SIZE = 7 * 1024;
 const TILE_CACHE_TTL_MS = 5 * 60 * 1000;
 const TILE_CACHE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const TILE_CACHE_MAX_ENTRIES = 64;
-const BTN_UP = 1;
-const BTN_SELECT = 2;
-const BTN_DOWN = 3;
+const BTN_UP = -1;
+const BTN_SELECT = 0;
+const BTN_DOWN = 1;
+
+const ZOOM_LEVEL_MIN = 0;
+const ZOOM_LEVEL_MAX = 20;
 
 const CMD_INIT = 1;
 const CMD_IMAGE_CHUNK = 2;
@@ -53,8 +54,8 @@ var renderState = {
 };
 
 var gpsState = {
-  latitude: INIT_LAT,
-  longitude: INIT_LON,
+  latitude: typeof TEST_LAT !== "undefined" ? TEST_LAT : undefined,
+  longitude: typeof TEST_LON !== "undefined" ? TEST_LON : undefined,
   accuracy: 0,
   timestamp: 0,
 };
@@ -112,6 +113,10 @@ function sendNextChunk() {
 }
 
 function renderTileToWatch() {
+  if (gpsState.latitude === undefined || gpsState.longitude === undefined) {
+    console.log("GPS position not available, cannot render tile");
+    return;
+  }
   tileRenderer.render({
     renderState: renderState,
     config: config,
@@ -184,18 +189,19 @@ Pebble.addEventListener("appmessage", function (e) {
   } else if (payload.cmd === CMD_BUTTON_CLICK) {
     var buttonId = payload.button_id;
     if (buttonId === BTN_UP) {
-      config.zoomLevel = Math.min(config.zoomLevel + 1, 19);
+      config.zoomLevel = Math.min(ZOOM_LEVEL_MAX, config.zoomLevel + 1);
       renderTileToWatch();
       console.log("Up button clicked, zoom level: " + config.zoomLevel);
     } else if (buttonId === BTN_SELECT) {
       console.log("Select button clicked");
       // Handle select button click
     } else if (buttonId === BTN_DOWN) {
-      config.zoomLevel = Math.max(config.zoomLevel - 1, 0);
+      config.zoomLevel = Math.max(ZOOM_LEVEL_MIN, config.zoomLevel - 1);
       renderTileToWatch();
       console.log("Down button clicked, zoom level: " + config.zoomLevel);
       // Handle down button click
     }
+    saveSettings();
   }
 });
 
@@ -232,9 +238,7 @@ Pebble.addEventListener("ready", function () {
   );
 });
 
-// GeoLocation
-if (navigator.geolocation) {
-  setInterval(function () {
+function getCurrentPosition() {
     navigator.geolocation.getCurrentPosition(
       function (position) {
         // update watch if changed significantly (more than 10m)
@@ -269,7 +273,14 @@ if (navigator.geolocation) {
         console.log("Error getting position: " + JSON.stringify(err));
       }
     );
+}
+
+// GeoLocation
+if (navigator.geolocation) {
+  setInterval(function () {
+    getCurrentPosition();
   }, config.updateIntervalMs);
+  getCurrentPosition();
 } else {
   console.log("Geolocation is not supported by this browser.");
 }

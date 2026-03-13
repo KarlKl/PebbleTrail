@@ -19,6 +19,8 @@
 		<canvas id="debugCanvasOutput" width="144" height="168" style="border:1px solid #fff;"></canvas>
 	</div>
 	<script>
+		var TEST_LAT = 48.3067582;
+		var TEST_LON = 14.2861719;
 
 		Pebble = {
 			_events: [],
@@ -109,9 +111,23 @@
 	<script>
 		var tileCache = module.exports;
 	</script>
+	<script src="./src/pkjs/tileRenderer.js"></script>
+	<script>
+		var tileRenderer = module.exports;
+	</script>
+	<script src="./src/pkjs/tileUrl.js"></script>
+	<script>
+		var tileUrl = module.exports;
+	</script>
+	<script src="./src/pkjs/gpx.js"></script>
+	<script>
+		var gpx = module.exports;
+	</script>
 	<script src="./src/pkjs/index.js"></script>
-	<button onclick="config.zoomLevel = Math.max(0, config.zoomLevel + 1); renderTileToWatch();">Zoom In</button>
-	<button onclick="config.zoomLevel = Math.min(19, config.zoomLevel - 1); renderTileToWatch();">Zoom Out</button>
+	<button onclick="config.zoomLevel = Math.min(ZOOM_LEVEL_MAX, config.zoomLevel + 1); renderTileToWatch();">Zoom
+		In</button>
+	<button onclick="config.zoomLevel = Math.max(ZOOM_LEVEL_MIN, config.zoomLevel - 1); renderTileToWatch();">Zoom
+		Out</button>
 
 	<select id="isColor" onchange="renderState.isColor = this.value == 'true'; renderTileToWatch();">
 		<option value="true">Color</option>
