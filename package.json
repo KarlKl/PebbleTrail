@@ -35,6 +35,7 @@
     "messageKeys": [
       "cmd",
       "JSReady",
+      "isCanvasSupported",
       "width",
       "height",
       "bytes_per_row",

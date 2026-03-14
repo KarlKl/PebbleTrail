@@ -7,6 +7,10 @@ function createTileRenderer(options) {
   var renderToken = 0;
 
   function initCanvas(width, height) {
+    if (typeof document === "undefined" || !document.createElement) {
+      console.log("Canvas API unavailable in PKJS environment");
+      return null;
+    }
     try {
       var canvas = document.createElement("canvas");
       canvas.width = width;
@@ -36,6 +40,10 @@ function createTileRenderer(options) {
     }
 
     return canvasContext;
+  }
+
+  function isCanvasSupported() {
+    return ensureCanvas(1, 1) !== null;
   }
 
   function getOutputFormat(width, isColor, enforceMonochrome) {
@@ -144,11 +152,6 @@ function createTileRenderer(options) {
   }
 
   function render(params) {
-    if (typeof document === "undefined" || !document.createElement) {
-      console.log("Canvas API unavailable in PKJS environment");
-      return;
-    }
-
     tileCache.cleanup(false);
 
     var renderState = params.renderState;
@@ -258,8 +261,52 @@ function createTileRenderer(options) {
     }
   }
 
+  function renderError(params, message, icon = "⚡") {
+    var renderState = params.renderState;
+    var config = params.config;
+    var width = renderState.width;
+    var height = renderState.height;
+    var outputFormat = getOutputFormat(
+      width,
+      renderState.isColor,
+      config.enforceMonochrome
+    );
+
+    var ctx = ensureCanvas(width, height);
+    if (!ctx) {
+      console.log("Canvas context unavailable");
+      return;
+    }
+
+    if (ctx.clearRect) {
+      ctx.clearRect(0, 0, width, height);
+    }
+
+    // render warning sign ⚡ and message
+    ctx.fillStyle = outputFormat.outputIsColor ? "rgb(255, 255, 0)" : "rgb(255, 255, 255)";
+    ctx.font = "26px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(icon, width / 2, height / 2 - 40);
+    ctx.fillStyle = outputFormat.outputIsColor ? "rgb(255, 0, 0)" : "rgb(255, 255, 255)";
+    ctx.font = "16px sans-serif";
+    // split message into multiple lines if it contains \n
+    var lines = message.split("\n");
+    for (var i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], width / 2, height / 2 - 10 + i * 18);
+    }
+    
+    params.onFrameReady({
+      packed: packCanvas(ctx, width, height, outputFormat),
+      outputIsColor: outputFormat.outputIsColor,
+      outputBytesPerRow: outputFormat.outputBytesPerRow,
+    });
+  }
+
   return {
     render: render,
+    renderError: renderError,
+    isCanvasSupported: isCanvasSupported,
   };
 }
 

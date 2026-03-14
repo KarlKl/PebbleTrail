@@ -74,7 +74,15 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context) 
     if (ready_t) {
       s_js_ready = ready_t->value->uint8 != 0;
       APP_LOG(APP_LOG_LEVEL_INFO, "JSReady: %d", s_js_ready);
-      prv_request_render();
+      Tuple *canvas_supported_t = dict_find(iter, MESSAGE_KEY_isCanvasSupported);
+      if (canvas_supported_t && canvas_supported_t->value->uint8) {
+        APP_LOG(APP_LOG_LEVEL_INFO, "JS reports canvas support");
+        prv_request_render();
+      } else {
+        APP_LOG(APP_LOG_LEVEL_WARNING, "JS reports no canvas support");
+        // show error message on watch
+        text_layer_set_text(s_status_layer, "Canvas not supported :(");
+      }
     }
     return;
   }

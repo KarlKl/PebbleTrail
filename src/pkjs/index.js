@@ -119,6 +119,7 @@ function sendNextChunk() {
 function renderTileToWatch() {
   if (gpsState.latitude === undefined || gpsState.longitude === undefined) {
     console.log("GPS position not available, cannot render tile");
+    renderErrorToWatch("GPS position\nnot available", "⌖");
     return;
   }
   tileRenderer.render({
@@ -167,70 +168,6 @@ function parseGpxTrackPointsAndSave(gpxString) {
   setGpxPoints(points);
   return points;
 }
-
-Pebble.addEventListener("appmessage", function (e) {
-  console.log("AppMessage received: " + JSON.stringify(e));
-  var payload = e.payload || {};
-  if (payload.cmd === CMD_INIT) {
-    renderState.width = payload.width;
-    renderState.height = payload.height;
-    renderState.bytesPerRow = payload.bytes_per_row;
-    renderState.isColor = payload.is_color === 1;
-
-    if (config.tileProvider === undefined) {
-      config.tileProvider = renderState.isColor ? "osm" : "stamen_toner";
-    }
-
-    console.log(
-      "Rendering map for " +
-        renderState.width +
-        "x" +
-        renderState.height +
-        " color=" +
-        renderState.isColor
-    );
-    renderTileToWatch();
-  } else if (payload.cmd === CMD_BUTTON_CLICK) {
-    var buttonId = payload.button_id;
-    handleButtonClick(buttonId);
-  } else if (payload.cmd === CMD_SAVE_SETTINGS) {
-    saveSettings();
-    console.log("Saved settings on watch exit request");
-  }
-});
-
-Pebble.addEventListener("ready", function () {
-  console.log("PKJS ready, waiting for watch request");
-  tileCache.cleanup(true);
-
-  if (localStorage.settings) {
-    console.log("Found saved settings in localStorage, loading");
-    var options = JSON.parse(localStorage.settings);
-    options.showCurrentLocationDot = options.showCurrentLocationDot === true;
-    options.enforceMonochrome = options.enforceMonochrome === true;
-    options.updateIntervalMs *= 1;
-    options.zoomLevel *= 1;
-    options.gpxPoints = options.gpxPoints || [];
-    Object.assign(config, options);
-    console.log("Loaded settings from localStorage: " + JSON.stringify(config));
-  }
-
-  var dict = {
-    cmd: 1,
-    JSReady: 1,
-  };
-  Pebble.sendAppMessage(
-    dict,
-    function () {
-      console.log("Notified watch that JS is ready");
-    },
-    function (err) {
-      console.log(
-        "Failed to notify watch that JS is ready: " + JSON.stringify(err)
-      );
-    }
-  );
-});
 
 function handleButtonClick(buttonId) {
   if (buttonId === BTN_UP) {
@@ -281,7 +218,27 @@ function getCurrentPosition() {
     },
     function (err) {
       console.log("Error getting position: " + JSON.stringify(err));
+      renderErrorToWatch("Error getting\nGPS position", "⌖");
     }
+  );
+}
+
+function renderErrorToWatch(message, icon = "⚡") {
+  tileRenderer.renderError(
+    {
+      renderState: renderState,
+      config: config,
+      onFrameReady: function (frame) {
+        renderState.outputIsColor = frame.outputIsColor;
+        renderState.outputBytesPerRow = frame.outputBytesPerRow;
+        renderState.sendData = frame.packed;
+        renderState.sendIndex = 0;
+        renderState.totalBytes = frame.packed.length;
+        sendNextChunk();
+      },
+    },
+    message,
+    icon
   );
 }
 
@@ -295,7 +252,72 @@ if (navigator.geolocation) {
   getCurrentPosition();
 } else {
   console.log("Geolocation is not supported by this browser.");
+  renderErrorToWatch("Geolocation\nnot supported");
 }
+
+Pebble.addEventListener("appmessage", function (e) {
+  console.log("AppMessage received: " + JSON.stringify(e));
+  var payload = e.payload || {};
+  if (payload.cmd === CMD_INIT) {
+    renderState.width = payload.width;
+    renderState.height = payload.height;
+    renderState.bytesPerRow = payload.bytes_per_row;
+    renderState.isColor = payload.is_color === 1;
+
+    if (config.tileProvider === undefined) {
+      config.tileProvider = renderState.isColor ? "osm" : "stamen_toner";
+    }
+
+    console.log(
+      "Display settings of watch width:" +
+        renderState.width +
+        " height: " +
+        renderState.height +
+        " color:" +
+        renderState.isColor
+    );
+  } else if (payload.cmd === CMD_BUTTON_CLICK) {
+    var buttonId = payload.button_id;
+    handleButtonClick(buttonId);
+  } else if (payload.cmd === CMD_SAVE_SETTINGS) {
+    saveSettings();
+    console.log("Saved settings on watch exit request");
+  }
+});
+
+Pebble.addEventListener("ready", function () {
+  console.log("PKJS ready, waiting for watch request");
+  tileCache.cleanup(true);
+
+  if (localStorage.settings) {
+    console.log("Found saved settings in localStorage, loading");
+    var options = JSON.parse(localStorage.settings);
+    options.showCurrentLocationDot = options.showCurrentLocationDot === true;
+    options.enforceMonochrome = options.enforceMonochrome === true;
+    options.updateIntervalMs *= 1;
+    options.zoomLevel *= 1;
+    options.gpxPoints = options.gpxPoints || [];
+    Object.assign(config, options);
+    console.log("Loaded settings from localStorage: " + JSON.stringify(config));
+  }
+
+  var dict = {
+    cmd: 1,
+    JSReady: 1,
+    isCanvasSupported: tileRenderer.isCanvasSupported() ? 1 : 0,
+  };
+  Pebble.sendAppMessage(
+    dict,
+    function () {
+      console.log("Notified watch that JS is ready");
+    },
+    function (err) {
+      console.log(
+        "Failed to notify watch that JS is ready: " + JSON.stringify(err)
+      );
+    }
+  );
+});
 
 Pebble.addEventListener("showConfiguration", function (e) {
   Pebble.openURL(clay.generateUrl());
@@ -309,8 +331,7 @@ Pebble.addEventListener("webviewclosed", function (e) {
   config.showCurrentLocationDot = newSettings.showCurrentLocationDot.value;
   config.tileProvider = newSettings.tileProvider.value;
   if (newSettings.onlyUpdateOnSelectPress) {
-    config.onlyUpdateOnSelectPress =
-      newSettings.onlyUpdateOnSelectPress.value;
+    config.onlyUpdateOnSelectPress = newSettings.onlyUpdateOnSelectPress.value;
     if (config.onlyUpdateOnSelectPress) {
       clearInterval(geolocationUpdateInterval);
       geolocationUpdateInterval = null;
