@@ -112,6 +112,21 @@ module.exports = [
         capabilities: ["COLOR"],
       },
       {
+        type: "select",
+        messageKey: "gpxLineStyle",
+        label: "GPX Track Line Style",
+        defaultValue: "[]",
+        options: [
+          { label: "Solid", value: "[]" },
+          { label: "Dashed", value: "[5, 5]" },
+          { label: "Dotted", value: "[1, 2]" },
+        ],
+      },
+      {
+        type: "text",
+        defaultValue: "For better visibility, especially on monochrom watches, you can set the GPX line style to Dashed or Dotted above."
+      },
+      {
         type: "text",
         defaultValue:
           "Enter the URL of a GPX file to have its track points displayed on the watchface. OR paste the gpx file as text.",

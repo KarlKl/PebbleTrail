@@ -93,7 +93,7 @@ function createTileRenderer(options) {
     };
   }
 
-  function drawGpxTrack(ctx, gpxPoints, zoom, topLeftWorldX, topLeftWorldY) {
+  function drawGpxTrack(ctx, gpxPoints, gpxLineStyle, zoom, topLeftWorldX, topLeftWorldY) {
     if (!gpxPoints || gpxPoints.length === 0) {
       return;
     }
@@ -102,6 +102,7 @@ function createTileRenderer(options) {
     var firstTileX = geo.long2tileFloat(firstPoint.lon, zoom);
     var firstTileY = geo.lat2tileFloat(firstPoint.lat, zoom);
     ctx.beginPath();
+    ctx.setLineDash && ctx.setLineDash(JSON.parse(gpxLineStyle || "[]"));
     ctx.moveTo(
       firstTileX * 256 - topLeftWorldX,
       firstTileY * 256 - topLeftWorldY
@@ -126,7 +127,7 @@ function createTileRenderer(options) {
     var centerWorldY = params.centerWorldY;
 
     if (config.gpxPoints && config.gpxPoints.length > 0) {
-      drawGpxTrack(ctx, config.gpxPoints, zoom, topLeftWorldX, topLeftWorldY);
+      drawGpxTrack(ctx, config.gpxPoints, config.gpxLineStyle, zoom, topLeftWorldX, topLeftWorldY);
       ctx.strokeStyle = config.gpxTrackColor || "rgba(0, 0, 255, 0.8)";
       ctx.lineWidth = 3;
       ctx.stroke();
@@ -179,6 +180,7 @@ function createTileRenderer(options) {
 
   function render(params) {
     tileCache.cleanup(false);
+    console.log(JSON.stringify(params.config));
 
     var renderState = params.renderState;
     var config = params.config;

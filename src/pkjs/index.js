@@ -42,6 +42,7 @@ var config = {
   showZoomButtons: true,
   showCurrentLocationDot: true,
   gpxPoints: [],
+  gpxLineStyle: "[]", // solid
   enforceMonochrome: false,
   showTime: true,
 };
@@ -370,6 +371,9 @@ Pebble.addEventListener("webviewclosed", function (e) {
     config.enforceMonochrome = newSettings.enforceMonochrome.value;
   } else {
     config.enforceMonochrome = false;
+  }
+  if (newSettings.gpxLineStyle) {
+    config.gpxLineStyle = newSettings.gpxLineStyle.value;
   }
   config.gpxPoints = [];
   if (newSettings.gpxUrl.value && newSettings.gpxUrl.value.trim() !== "") {
