@@ -75,6 +75,16 @@ module.exports = [
         "min": 10,
         "max": 300,
         "step": 10
+      },
+      {
+        "type": "text",
+        "defaultValue": "Enabling this option will make the watchface only fetch new tiles when you press the select button. This can help save battery if you don't need the map to update in real time."
+      },
+      {
+        "type": "toggle",
+        "messageKey": "onlyUpdateOnSelectPress",
+        "defaultValue": false,
+        "label": "Only Update When Select Button is Pressed"
       }
     ]
   },

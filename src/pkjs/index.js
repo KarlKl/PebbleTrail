@@ -36,6 +36,7 @@ const CMD_SAVE_SETTINGS = 4;
 var config = {
   tileProvider: undefined,
   updateIntervalMs: 15000,
+  onlyUpdateOnSelectPress: false,
   zoomLevel: 16,
   showCurrentLocationDot: true,
   gpxPoints: [],
@@ -72,6 +73,8 @@ var tileRenderer = createTileRenderer({
   imagePacking: imagePacking,
   tileCache: tileCache,
 });
+
+var geolocationUpdateInterval = null;
 
 function sendNextChunk() {
   if (!renderState.sendData) {
@@ -189,20 +192,7 @@ Pebble.addEventListener("appmessage", function (e) {
     renderTileToWatch();
   } else if (payload.cmd === CMD_BUTTON_CLICK) {
     var buttonId = payload.button_id;
-    if (buttonId === BTN_UP) {
-      config.zoomLevel = Math.min(ZOOM_LEVEL_MAX, config.zoomLevel + 1);
-      renderTileToWatch();
-      console.log("Up button clicked, zoom level: " + config.zoomLevel);
-    } else if (buttonId === BTN_SELECT) {
-      console.log("Select button clicked");
-      // Handle select button click
-    } else if (buttonId === BTN_DOWN) {
-      config.zoomLevel = Math.max(ZOOM_LEVEL_MIN, config.zoomLevel - 1);
-      renderTileToWatch();
-      console.log("Down button clicked, zoom level: " + config.zoomLevel);
-      // Handle down button click
-    }
-    saveSettings();
+    handleButtonClick(buttonId);
   } else if (payload.cmd === CMD_SAVE_SETTINGS) {
     saveSettings();
     console.log("Saved settings on watch exit request");
@@ -242,48 +232,66 @@ Pebble.addEventListener("ready", function () {
   );
 });
 
+function handleButtonClick(buttonId) {
+  if (buttonId === BTN_UP) {
+    config.zoomLevel = Math.min(ZOOM_LEVEL_MAX, config.zoomLevel + 1);
+    console.log("Up button clicked, zoom level: " + config.zoomLevel);
+    renderTileToWatch();
+  } else if (buttonId === BTN_SELECT) {
+    console.log("Select button clicked");
+    getCurrentPosition();
+  } else if (buttonId === BTN_DOWN) {
+    config.zoomLevel = Math.max(ZOOM_LEVEL_MIN, config.zoomLevel - 1);
+    console.log("Down button clicked, zoom level: " + config.zoomLevel);
+    renderTileToWatch();
+  }
+  saveSettings();
+}
+
 function getCurrentPosition() {
-    navigator.geolocation.getCurrentPosition(
-      function (position) {
-        // update watch if changed significantly (more than 10m)
-        var distance = geo.getDistanceFromLatLonInMeters(
-          gpsState.latitude,
-          gpsState.longitude,
-          position.coords.latitude,
-          position.coords.longitude
-        );
-        if (distance < 10) {
-          return;
-        }
-        gpsState.latitude = position.coords.latitude;
-        gpsState.longitude = position.coords.longitude;
-        gpsState.accuracy = position.coords.accuracy;
-        gpsState.timestamp = position.timestamp;
-
-        renderTileToWatch();
-
-        console.log(
-          "GPS update: " +
-            gpsState.latitude +
-            ", " +
-            gpsState.longitude +
-            " accuracy: " +
-            gpsState.accuracy +
-            " timestamp: " +
-            gpsState.timestamp
-        );
-      },
-      function (err) {
-        console.log("Error getting position: " + JSON.stringify(err));
+  navigator.geolocation.getCurrentPosition(
+    function (position) {
+      // update watch if changed significantly (more than 10m)
+      var distance = geo.getDistanceFromLatLonInMeters(
+        gpsState.latitude,
+        gpsState.longitude,
+        position.coords.latitude,
+        position.coords.longitude
+      );
+      if (distance < 10) {
+        return;
       }
-    );
+      gpsState.latitude = position.coords.latitude;
+      gpsState.longitude = position.coords.longitude;
+      gpsState.accuracy = position.coords.accuracy;
+      gpsState.timestamp = position.timestamp;
+
+      renderTileToWatch();
+
+      console.log(
+        "GPS update: " +
+          gpsState.latitude +
+          ", " +
+          gpsState.longitude +
+          " accuracy: " +
+          gpsState.accuracy +
+          " timestamp: " +
+          gpsState.timestamp
+      );
+    },
+    function (err) {
+      console.log("Error getting position: " + JSON.stringify(err));
+    }
+  );
 }
 
 // GeoLocation
 if (navigator.geolocation) {
-  setInterval(function () {
-    getCurrentPosition();
-  }, config.updateIntervalMs);
+  if (config.updateIntervalMs > 10000 && !config.onlyUpdateOnSelectPress) {
+    geolocationUpdateInterval = setInterval(function () {
+      getCurrentPosition();
+    }, config.updateIntervalMs);
+  }
   getCurrentPosition();
 } else {
   console.log("Geolocation is not supported by this browser.");
@@ -300,8 +308,22 @@ Pebble.addEventListener("webviewclosed", function (e) {
   var newSettings = clay.getSettings(e.response, false);
   config.showCurrentLocationDot = newSettings.showCurrentLocationDot.value;
   config.tileProvider = newSettings.tileProvider.value;
+  if (newSettings.onlyUpdateOnSelectPress) {
+    config.onlyUpdateOnSelectPress =
+      newSettings.onlyUpdateOnSelectPress.value;
+    if (config.onlyUpdateOnSelectPress) {
+      clearInterval(geolocationUpdateInterval);
+      geolocationUpdateInterval = null;
+    }
+  }
   if (newSettings.updateIntervalSeconds) {
     config.updateIntervalMs = newSettings.updateIntervalSeconds.value * 1000;
+    if (!config.onlyUpdateOnSelectPress) {
+      clearInterval(geolocationUpdateInterval);
+      geolocationUpdateInterval = setInterval(function () {
+        getCurrentPosition();
+      }, config.updateIntervalMs);
+    }
   }
   config.zoomLevel = newSettings.zoomLevel.value * 1;
   // gpx stuff
