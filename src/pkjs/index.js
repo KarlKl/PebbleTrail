@@ -252,7 +252,6 @@ if (navigator.geolocation) {
       getCurrentPosition();
     }, config.updateIntervalMs);
   }
-  getCurrentPosition();
 } else {
   console.log("Geolocation is not supported by this browser.");
   renderErrorToWatch("Geolocation\nnot supported");
@@ -286,6 +285,7 @@ Pebble.addEventListener("appmessage", function (e) {
     saveSettings();
     console.log("Saved settings on watch exit request");
   }
+  getCurrentPosition();
 });
 
 Pebble.addEventListener("ready", function () {
@@ -351,6 +351,15 @@ Pebble.addEventListener("webviewclosed", function (e) {
     }
   }
   config.zoomLevel = newSettings.zoomLevel.value * 1;
+  if (newSettings.showTime) {
+    config.showTime = newSettings.showTime.value;
+  }
+  if (newSettings.showZoomLevel) {
+    config.showZoomLevel = newSettings.showZoomLevel.value;
+  }
+  if (newSettings.showZoomButtons) {
+    config.showZoomButtons = newSettings.showZoomButtons.value;
+  }
   // gpx stuff
   if (newSettings.gpxTrackColor) {
     config.gpxTrackColor = newSettings.gpxTrackColor.value;

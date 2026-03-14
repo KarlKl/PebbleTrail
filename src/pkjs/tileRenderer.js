@@ -118,8 +118,8 @@ function createTileRenderer(options) {
   function drawOverlays(ctx, params) {
     var config = params.config;
     var zoom = params.zoom;
-    var showZoomLevel = config.showZoomLevel || false;
-    var showZoomButtons = config.showZoomButtons || true;
+    var showZoomLevel = config.showZoomLevel === undefined ? false : config.showZoomLevel;
+    var showZoomButtons = config.showZoomButtons === undefined ? true : config.showZoomButtons;
     var topLeftWorldX = params.topLeftWorldX;
     var topLeftWorldY = params.topLeftWorldY;
     var centerWorldX = params.centerWorldX;
@@ -191,7 +191,6 @@ function createTileRenderer(options) {
       renderState.isColor,
       config.enforceMonochrome
     );
-
     var ctx = ensureCanvas(width, height);
     if (!ctx) {
       console.log("Canvas context unavailable");
