@@ -48,7 +48,14 @@
       "button_id"
     ],
     "resources": {
-      "media": []
+      "media": [
+        {
+          "menuIcon": true,
+					"type": "bitmap",
+					"name": "IMAGE_MENU_ICON",
+					"file": "img/icon.png"
+        }
+      ]
     }
   }
 }
