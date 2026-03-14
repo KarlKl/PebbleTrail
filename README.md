@@ -12,3 +12,14 @@ PebbleTrail is a Pebble smartwatch application that provides real-time GPS track
 
 ## Known limitations
 - The app relies on the Canvas API for rendering maps, which may not be supported in all environments. If canvas support is unavailable, the app will display an error message on the watch.
+
+## Map Providers
+PebbleTrail supports multiple map providers, which can be configured in the app settings. Some are better suited for color displays, while others are optimized for black-and-white displays.
+
+## Copyright and Attribution
+Many thanks to the map providers for their services and data. The following attributions are required when using their maps:
+ - &copy; <a href="https://stadiamaps.com/" target="_blank">Stadia Maps</a>
+ - &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a>
+ - &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>
+
+This project was developed with use of AI assistance, which helped in code generation and debugging. The AI was used to enhance the development process and improve code quality.

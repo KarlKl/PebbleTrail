@@ -56,8 +56,8 @@ var renderState = {
 };
 
 var gpsState = {
-  latitude: typeof TEST_LAT !== "undefined" ? TEST_LAT : undefined,
-  longitude: typeof TEST_LON !== "undefined" ? TEST_LON : undefined,
+  latitude: undefined,
+  longitude: undefined,
   accuracy: 0,
   timestamp: 0,
 };

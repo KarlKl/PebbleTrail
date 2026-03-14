@@ -34,6 +34,10 @@ module.exports = [
         ]
       },
       {
+        "type": "text",
+        "defaultValue": "&copy; <a href=\"https://stadiamaps.com/\" target=\"_blank\">Stadia Maps</a><br>&copy; <a href=\"https://openmaptiles.org/\" target=\"_blank\">OpenMapTiles</a><br>&copy; <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\">OpenStreetMap</a>"
+      },
+      {
         "type": "slider",
         "messageKey": "zoomLevel",
         "defaultValue": 16,
