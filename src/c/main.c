@@ -21,6 +21,7 @@ enum {
   CMD_INIT = 1,
   CMD_IMAGE_CHUNK = 2,
   CMD_BUTTON_CLICK = 3,
+  CMD_SAVE_SETTINGS = 4,
 };
 
 bool comm_is_js_ready() {
@@ -230,6 +231,14 @@ static void prv_window_load(Window *window) {
 }
 
 static void prv_window_unload(Window *window) {
+  if (s_js_ready) {
+    DictionaryIterator *iter;
+    if (app_message_outbox_begin(&iter) == APP_MSG_OK) {
+      dict_write_uint8(iter, MESSAGE_KEY_cmd, CMD_SAVE_SETTINGS);
+      app_message_outbox_send();
+    }
+  }
+
   text_layer_destroy(s_status_layer);
   layer_destroy(s_canvas_layer);
   if (s_retry_timer) {

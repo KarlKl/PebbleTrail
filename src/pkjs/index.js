@@ -30,6 +30,7 @@ const ZOOM_LEVEL_MAX = 20;
 const CMD_INIT = 1;
 const CMD_IMAGE_CHUNK = 2;
 const CMD_BUTTON_CLICK = 3;
+const CMD_SAVE_SETTINGS = 4;
 
 // initial configuration values, can be overridden by saved settings in localStorage or by the configuration page
 var config = {
@@ -202,6 +203,9 @@ Pebble.addEventListener("appmessage", function (e) {
       // Handle down button click
     }
     saveSettings();
+  } else if (payload.cmd === CMD_SAVE_SETTINGS) {
+    saveSettings();
+    console.log("Saved settings on watch exit request");
   }
 });
 
