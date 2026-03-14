@@ -5,6 +5,7 @@ static Layer *s_canvas_layer;
 static TextLayer *s_status_layer;
 
 static bool s_js_ready;
+static bool s_show_time_overlay;
 
 static uint8_t *s_image_buffer;
 static size_t s_image_buffer_size;
@@ -16,6 +17,7 @@ static bool s_device_is_color;
 static bool s_image_is_color;
 static bool s_image_ready;
 static AppTimer *s_retry_timer;
+static AppTimer *s_time_overlay_timer;
 
 enum {
   CMD_INIT = 1,
@@ -26,6 +28,68 @@ enum {
 
 bool comm_is_js_ready() {
   return s_js_ready;
+}
+
+static void prv_schedule_time_overlay_tick(void);
+
+static void prv_draw_time_overlay(Layer *layer, GContext *ctx) {
+  if (!s_show_time_overlay) {
+    return;
+  }
+
+  time_t now = time(NULL);
+  struct tm *tick_time = localtime(&now);
+  if (!tick_time) {
+    return;
+  }
+
+  char time_text[6];
+  strftime(time_text, sizeof(time_text), "%H:%M", tick_time);
+
+  GRect bounds = layer_get_bounds(layer);
+  const int16_t overlay_h = 22;
+  GRect overlay_bounds = GRect(bounds.size.w / 2 - 20, 0, 40, overlay_h);
+  GRect text_bounds = GRect(0, -1, bounds.size.w, overlay_h + 1);
+
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, overlay_bounds, 0, GCornerNone);
+  graphics_context_set_text_color(ctx, GColorWhite);
+  graphics_draw_text(
+    ctx,
+    time_text,
+    fonts_get_system_font(FONT_KEY_GOTHIC_18),
+    text_bounds,
+    GTextOverflowModeTrailingEllipsis,
+    GTextAlignmentCenter,
+    NULL
+  );
+}
+
+static void prv_time_overlay_timer_handler(void *context) {
+  s_time_overlay_timer = NULL;
+  if (s_canvas_layer && s_show_time_overlay) {
+    layer_mark_dirty(s_canvas_layer);
+  }
+  prv_schedule_time_overlay_tick();
+}
+
+static void prv_schedule_time_overlay_tick(void) {
+  if (s_time_overlay_timer) {
+    app_timer_cancel(s_time_overlay_timer);
+    s_time_overlay_timer = NULL;
+  }
+
+  time_t now = time(NULL);
+  struct tm *tick_time = localtime(&now);
+  uint32_t delay_ms = 60000;
+  if (tick_time) {
+    delay_ms = (uint32_t)(60 - tick_time->tm_sec) * 1000;
+    if (delay_ms == 0) {
+      delay_ms = 60000;
+    }
+  }
+
+  s_time_overlay_timer = app_timer_register(delay_ms, prv_time_overlay_timer_handler, NULL);
 }
 
 static void prv_reset_image_state(void) {
@@ -74,6 +138,11 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context) 
     if (ready_t) {
       s_js_ready = ready_t->value->uint8 != 0;
       APP_LOG(APP_LOG_LEVEL_INFO, "JSReady: %d", s_js_ready);
+      Tuple *show_time_t = dict_find(iter, MESSAGE_KEY_showTimeOverlay);
+      if (show_time_t) {
+        s_show_time_overlay = show_time_t->value->uint8 != 0;
+        layer_mark_dirty(s_canvas_layer);
+      }
       Tuple *canvas_supported_t = dict_find(iter, MESSAGE_KEY_isCanvasSupported);
       if (canvas_supported_t && canvas_supported_t->value->uint8) {
         APP_LOG(APP_LOG_LEVEL_INFO, "JS reports canvas support");
@@ -158,6 +227,7 @@ static void prv_canvas_update_proc(Layer *layer, GContext *ctx) {
   if (!s_image_ready || !s_image_buffer) {
     graphics_context_set_fill_color(ctx, GColorWhite);
     graphics_fill_rect(ctx, bounds, 0, GCornerNone);
+    prv_draw_time_overlay(layer, ctx);
     return;
   }
 
@@ -195,6 +265,7 @@ static void prv_canvas_update_proc(Layer *layer, GContext *ctx) {
   }
 
   graphics_release_frame_buffer(ctx, fb);
+  prv_draw_time_overlay(layer, ctx);
 }
 
 static void prv_window_load(Window *window) {
@@ -232,6 +303,7 @@ static void prv_window_load(Window *window) {
   }
 
   prv_reset_image_state();
+  prv_schedule_time_overlay_tick();
   if (s_retry_timer) {
     app_timer_cancel(s_retry_timer);
     s_retry_timer = NULL;
@@ -252,6 +324,10 @@ static void prv_window_unload(Window *window) {
   if (s_retry_timer) {
     app_timer_cancel(s_retry_timer);
     s_retry_timer = NULL;
+  }
+  if (s_time_overlay_timer) {
+    app_timer_cancel(s_time_overlay_timer);
+    s_time_overlay_timer = NULL;
   }
   prv_reset_image_state();
 }

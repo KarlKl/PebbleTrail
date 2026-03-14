@@ -35,6 +35,7 @@
     "messageKeys": [
       "cmd",
       "JSReady",
+      "showTimeOverlay",
       "isCanvasSupported",
       "width",
       "height",

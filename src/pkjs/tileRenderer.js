@@ -102,7 +102,10 @@ function createTileRenderer(options) {
     var firstTileX = geo.long2tileFloat(firstPoint.lon, zoom);
     var firstTileY = geo.lat2tileFloat(firstPoint.lat, zoom);
     ctx.beginPath();
-    ctx.moveTo(firstTileX * 256 - topLeftWorldX, firstTileY * 256 - topLeftWorldY);
+    ctx.moveTo(
+      firstTileX * 256 - topLeftWorldX,
+      firstTileY * 256 - topLeftWorldY
+    );
 
     for (var i = 1; i < gpxPoints.length; i++) {
       var point = gpxPoints[i];
@@ -115,6 +118,8 @@ function createTileRenderer(options) {
   function drawOverlays(ctx, params) {
     var config = params.config;
     var zoom = params.zoom;
+    var showZoomLevel = config.showZoomLevel || false;
+    var showZoomButtons = config.showZoomButtons || true;
     var topLeftWorldX = params.topLeftWorldX;
     var topLeftWorldY = params.topLeftWorldY;
     var centerWorldX = params.centerWorldX;
@@ -134,6 +139,27 @@ function createTileRenderer(options) {
       ctx.arc(gpsDotX, gpsDotY, 4, 0, 2 * Math.PI);
       ctx.fillStyle = "rgba(255, 0, 0, 0.8)";
       ctx.fill();
+    }
+
+    if (showZoomLevel) {
+      var zoomLevelText = "z" + zoom;
+      ctx.font = "12px sans-serif";
+      var textX = 4;
+      var textY = params.height - 16;
+      ctx.fillStyle = "rgb(0, 0, 0)";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(zoomLevelText, textX, textY);
+    }
+
+    if (showZoomButtons) {
+      ctx.fillStyle = "rgb(0, 0, 0)";
+      ctx.font = "16px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      ctx.fillText("＋", params.width - 10, params.height / 4);
+      ctx.fillText("－", params.width - 10, (params.height / 4) * 3);
     }
   }
 
@@ -213,6 +239,8 @@ function createTileRenderer(options) {
       drawOverlays(ctx, {
         config: config,
         zoom: zoom,
+        width: width,
+        height: height,
         topLeftWorldX: viewport.topLeftWorldX,
         topLeftWorldY: viewport.topLeftWorldY,
         centerWorldX: viewport.centerWorldX,
@@ -283,19 +311,23 @@ function createTileRenderer(options) {
     }
 
     // render warning sign ⚡ and message
-    ctx.fillStyle = outputFormat.outputIsColor ? "rgb(255, 255, 0)" : "rgb(255, 255, 255)";
+    ctx.fillStyle = outputFormat.outputIsColor
+      ? "rgb(255, 255, 0)"
+      : "rgb(255, 255, 255)";
     ctx.font = "26px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(icon, width / 2, height / 2 - 40);
-    ctx.fillStyle = outputFormat.outputIsColor ? "rgb(255, 0, 0)" : "rgb(255, 255, 255)";
+    ctx.fillStyle = outputFormat.outputIsColor
+      ? "rgb(255, 0, 0)"
+      : "rgb(255, 255, 255)";
     ctx.font = "16px sans-serif";
     // split message into multiple lines if it contains \n
     var lines = message.split("\n");
     for (var i = 0; i < lines.length; i++) {
       ctx.fillText(lines[i], width / 2, height / 2 - 10 + i * 18);
     }
-    
+
     params.onFrameReady({
       packed: packCanvas(ctx, width, height, outputFormat),
       outputIsColor: outputFormat.outputIsColor,

@@ -38,9 +38,12 @@ var config = {
   updateIntervalMs: 15000,
   onlyUpdateOnSelectPress: false,
   zoomLevel: 16,
+  showZoomLevel: false,
+  showZoomButtons: true,
   showCurrentLocationDot: true,
   gpxPoints: [],
   enforceMonochrome: false,
+  showTime: true,
 };
 
 var renderState = {
@@ -304,6 +307,7 @@ Pebble.addEventListener("ready", function () {
   var dict = {
     cmd: 1,
     JSReady: 1,
+    showTimeOverlay: config.showTime ? 1 : 0,
     isCanvasSupported: tileRenderer.isCanvasSupported() ? 1 : 0,
   };
   Pebble.sendAppMessage(
