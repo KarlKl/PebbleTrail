@@ -21,6 +21,7 @@
             "location",
             "configurable"
         ],
+        "shortName": "PebbleTrail",
         "displayName": "PebbleTrail Map",
         "enableMultiJS": true,
         "messageKeys": [
