@@ -4,7 +4,16 @@
         "@rebble/clay": "^1.0.0"
     },
     "keywords": [
-        "pebble-app"
+        "pebble-app",
+        "gps",
+        "map",
+        "maps",
+        "gpx",
+        "trail",
+        "track",
+        "osm",
+        "openstreetmap",
+        "stadiamaps"
     ],
     "name": "pebbletrail-map",
     "pebble": {
