@@ -16,7 +16,7 @@ PebbleTrail Map supports multiple map providers, which can be configured in the 
 
 ## Settings
 The app provides a settings page where users can customize various aspects of the map and GPX track.
-![Settings Screen on the phone](images/settings.png){width="200"}
+<img src="images/settings.png" alt="Settings Screen on the phone" width="200"/>
 
 
 ## Copyright and Attribution
