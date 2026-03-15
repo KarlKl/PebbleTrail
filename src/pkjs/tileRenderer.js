@@ -159,8 +159,8 @@ function createTileRenderer(options) {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      ctx.fillText("＋", params.width - 10, params.height / 4);
-      ctx.fillText("－", params.width - 10, (params.height / 4) * 3);
+      ctx.fillText("＋", params.width - 10, params.height / 12 * 2);
+      ctx.fillText("－", params.width - 10, (params.height / 12) * 10);
     }
   }
 

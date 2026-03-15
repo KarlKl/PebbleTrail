@@ -26,6 +26,7 @@ enum
   CMD_IMAGE_CHUNK = 2,
   CMD_BUTTON_CLICK = 3,
   CMD_SAVE_SETTINGS = 4,
+  CMD_UPDATE_TIME_OVERLAY = 5,
 };
 
 bool comm_is_js_ready()
@@ -289,6 +290,14 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context)
     {
       s_image_ready = true;
       layer_set_hidden(text_layer_get_layer(s_status_layer), true);
+      layer_mark_dirty(s_canvas_layer);
+    }
+  } else if (cmd_t->value->uint8 == CMD_UPDATE_TIME_OVERLAY)
+  {
+    Tuple *show_time_t = dict_find(iter, MESSAGE_KEY_showTimeOverlay);
+    if (show_time_t)
+    {
+      s_show_time_overlay = show_time_t->value->uint8 != 0;
       layer_mark_dirty(s_canvas_layer);
     }
   }

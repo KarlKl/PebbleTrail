@@ -31,6 +31,7 @@ const CMD_INIT = 1;
 const CMD_IMAGE_CHUNK = 2;
 const CMD_BUTTON_CLICK = 3;
 const CMD_SAVE_SETTINGS = 4;
+const CMD_UPDATE_TIME_OVERLAY = 5;
 
 // initial configuration values, can be overridden by saved settings in localStorage or by the configuration page
 var config = {
@@ -269,6 +270,25 @@ function renderErrorToWatch(message, icon = "⚡") {
   );
 }
 
+function sendUpdateTimeOverlay(show) {
+  var dict = {
+    cmd: CMD_UPDATE_TIME_OVERLAY,
+    showTimeOverlay: show ? 1 : 0,
+  };
+  Pebble.sendAppMessage(
+    dict,
+    function () {
+      console.log("Notified watch of showTime overlay change: " + show);
+    },
+    function (err) {
+      console.log(
+        "Failed to notify watch of showTime overlay change: " +
+          JSON.stringify(err)
+      );
+    }
+  );
+}
+
 // GeoLocation
 if (navigator.geolocation) {
   if (config.updateIntervalMs > 10000 && !config.onlyUpdateOnSelectPress) {
@@ -375,8 +395,9 @@ Pebble.addEventListener("webviewclosed", function (e) {
     }
   }
   config.zoomLevel = newSettings.zoomLevel.value * 1;
-  if (newSettings.showTime) {
+  if (newSettings.showTime && newSettings.showTime.value !== config.showTime) {
     config.showTime = newSettings.showTime.value;
+    sendUpdateTimeOverlay(config.showTime);
   }
   if (newSettings.showZoomLevel) {
     config.showZoomLevel = newSettings.showZoomLevel.value;

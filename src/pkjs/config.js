@@ -166,11 +166,7 @@ module.exports = [
         type: "toggle",
         messageKey: "showTime",
         defaultValue: true,
-        label: "Show Current Time*",
-      },
-      {
-        type: "text",
-        defaultValue: "*Changing this setting needs restart of watchapp.",
+        label: "Show Current Time",
       },
       {
         type: "toggle",
