@@ -41,8 +41,11 @@ var config = {
   showZoomLevel: false,
   showZoomButtons: true,
   showCurrentLocationDot: true,
+  gpxUrl: "",
+  gpxText: "",
   gpxPoints: [],
-  gpxLineStyle: "[]", // solid
+  gpxLineStyle: "[5,5]", // dashed by default for better visibility on monochrome watches
+  gpxTrackColor: "0000FF", // blue by default
   enforceMonochrome: false,
   showTime: true,
 };
@@ -363,7 +366,7 @@ Pebble.addEventListener("webviewclosed", function (e) {
   }
   // gpx stuff
   if (newSettings.gpxTrackColor) {
-    config.gpxTrackColor = newSettings.gpxTrackColor.value;
+    config.gpxTrackColor = newSettings.gpxTrackColor.value.toString(16);
   } else {
     config.gpxTrackColor = 255;
   }
@@ -379,31 +382,36 @@ Pebble.addEventListener("webviewclosed", function (e) {
   if (newSettings.gpxUrl.value && newSettings.gpxUrl.value.trim() !== "") {
     console.log("GPX URL provided, fetching: " + newSettings.gpxUrl.value);
     var url = newSettings.gpxUrl.value.trim();
-    var request = new XMLHttpRequest();
-    request.open("GET", url, true);
-    request.onload = function () {
-      if (request.status >= 200 && request.status < 400) {
-        // Success!
-        var gpxText = request.responseText;
-        parseGpxTrackPointsAndSave(gpxText);
-        renderTileToWatch();
-      } else {
-        console.log("Failed to fetch GPX file, status: " + request.status);
-      }
-    };
-    request.onerror = function () {
-      console.log("Error fetching GPX file");
-    };
-    request.send();
+    if (url !== config.gpxUrl) {
+      var request = new XMLHttpRequest();
+      request.open("GET", url, true);
+      request.onload = function () {
+        if (request.status >= 200 && request.status < 400) {
+          // Success!
+          var gpxText = request.responseText;
+          parseGpxTrackPointsAndSave(gpxText);
+          renderTileToWatch();
+        } else {
+          console.log("Failed to fetch GPX file, status: " + request.status);
+        }
+      };
+      request.onerror = function () {
+        console.log("Error fetching GPX file");
+      };
+      request.send();
+      config.gpxUrl = url;
+    }
   } else if (
     newSettings.gpxText.value &&
-    newSettings.gpxText.value.trim() !== ""
+    newSettings.gpxText.value.trim() !== "" &&
+    newSettings.gpxText.value.trim() !== config.gpxText
   ) {
     console.log("GPX Text provided, parsing");
     parseGpxTrackPointsAndSave(newSettings.gpxText.value);
     renderTileToWatch();
+    config.gpxText = newSettings.gpxText.value;
   } else {
-    console.log("No GPX data provided");
+    console.log("No GPX data provided or GPX data unchanged");
     renderTileToWatch();
     saveSettings();
   }

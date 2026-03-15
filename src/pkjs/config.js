@@ -108,18 +108,18 @@ module.exports = [
         type: "color",
         messageKey: "gpxTrackColor",
         label: "GPX Track Color",
-        defaultValue: 255,
+        defaultValue: "0000FF",
         capabilities: ["COLOR"],
       },
       {
         type: "select",
         messageKey: "gpxLineStyle",
         label: "GPX Track Line Style",
-        defaultValue: "[]",
+        defaultValue: "[5,5]",
         options: [
           { label: "Solid", value: "[]" },
-          { label: "Dashed", value: "[5, 5]" },
-          { label: "Dotted", value: "[1, 2]" },
+          { label: "Dashed", value: "[5,5]" },
+          { label: "Dotted", value: "[1,2]" },
         ],
       },
       {

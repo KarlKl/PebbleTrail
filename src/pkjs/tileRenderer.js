@@ -128,7 +128,7 @@ function createTileRenderer(options) {
 
     if (config.gpxPoints && config.gpxPoints.length > 0) {
       drawGpxTrack(ctx, config.gpxPoints, config.gpxLineStyle, zoom, topLeftWorldX, topLeftWorldY);
-      ctx.strokeStyle = config.gpxTrackColor || "rgba(0, 0, 255, 0.8)";
+      ctx.strokeStyle = "#" + (config.gpxTrackColor || "0000FF");
       ctx.lineWidth = 3;
       ctx.stroke();
     }
