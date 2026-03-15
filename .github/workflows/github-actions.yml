@@ -14,7 +14,7 @@ jobs:
       run: |
         pebble build
     - name: Upload PBW Artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v6
       with:
         name: pebbletrail-pbw
         path: build/pebbletrail.pbw
