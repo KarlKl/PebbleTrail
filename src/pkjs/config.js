@@ -105,6 +105,12 @@ module.exports = [
         defaultValue: "GPX",
       },
       {
+        type: "toggle",
+        messageKey: "showGpxTrack",
+        defaultValue: true,
+        label: "Show GPX Track",
+      },
+      {
         type: "color",
         messageKey: "gpxTrackColor",
         label: "GPX Track Color",
@@ -129,13 +135,17 @@ module.exports = [
       {
         type: "text",
         defaultValue:
-          "Enter the URL of a GPX file to have its track points displayed on the watchface. OR paste the gpx file as text.",
+          "Enter the URL of a GPX file to have its track points displayed on the watchface. OR paste the gpx file as text. If both are provided, Text will be used.",
       },
       {
         type: "input",
         messageKey: "gpxUrl",
-        label: "GPX URL",
+        label: "GPX URL*",
         defaultValue: "",
+      },
+      {
+        type: "text",
+        defaultValue: "*Will be cached.",
       },
       {
         type: "input",

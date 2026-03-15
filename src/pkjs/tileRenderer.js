@@ -126,7 +126,7 @@ function createTileRenderer(options) {
     var centerWorldX = params.centerWorldX;
     var centerWorldY = params.centerWorldY;
 
-    if (config.gpxPoints && config.gpxPoints.length > 0) {
+    if (config.showGpxTrack && config.gpxPoints && config.gpxPoints.length > 0) {
       drawGpxTrack(ctx, config.gpxPoints, config.gpxLineStyle, zoom, topLeftWorldX, topLeftWorldY);
       ctx.strokeStyle = "#" + (config.gpxTrackColor || "0000FF");
       ctx.lineWidth = 3;

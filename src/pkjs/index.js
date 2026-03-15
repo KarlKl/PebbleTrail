@@ -41,6 +41,7 @@ var config = {
   showZoomLevel: false,
   showZoomButtons: true,
   showCurrentLocationDot: true,
+  showGpxTrack: true,
   gpxUrl: "",
   gpxText: "",
   gpxPoints: [],
@@ -378,11 +379,14 @@ Pebble.addEventListener("webviewclosed", function (e) {
   if (newSettings.gpxLineStyle) {
     config.gpxLineStyle = newSettings.gpxLineStyle.value;
   }
-  config.gpxPoints = [];
+  if (newSettings.showGpxTrack) {
+    config.showGpxTrack = newSettings.showGpxTrack.value;
+  }
   if (newSettings.gpxUrl.value && newSettings.gpxUrl.value.trim() !== "") {
     console.log("GPX URL provided, fetching: " + newSettings.gpxUrl.value);
     var url = newSettings.gpxUrl.value.trim();
     if (url !== config.gpxUrl) {
+      config.gpxPoints = [];
       var request = new XMLHttpRequest();
       request.open("GET", url, true);
       request.onload = function () {
@@ -407,6 +411,7 @@ Pebble.addEventListener("webviewclosed", function (e) {
     newSettings.gpxText.value.trim() !== config.gpxText
   ) {
     console.log("GPX Text provided, parsing");
+    config.gpxPoints = [];
     parseGpxTrackPointsAndSave(newSettings.gpxText.value);
     renderTileToWatch();
     config.gpxText = newSettings.gpxText.value;
