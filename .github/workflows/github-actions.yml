@@ -12,6 +12,11 @@ jobs:
       run: |
         curl -LsSf https://astral.sh/uv/install.sh | sh
         uv tool install pebble-tool --python 3.13
+    - name: Cache Pebble SDK
+      uses: actions/cache/save@v5
+      with:
+        path: /home/runner/.pebble-sdk/
+        key: pebble-sdk-${{ vars.PEBBLE_SDK_VERSION }}
     - name: Install Pebble SDK
       run: |
         pebble sdk install ${{ vars.PEBBLE_SDK_VERSION }}
@@ -23,8 +28,8 @@ jobs:
       with:
         name: pebbletrail-pbw
         path: build/PebbleTrail.pbw
-    - name: Cache Pebble Tool
-      uses: actions/cache@v5
+    - name: Cache Pebble SDK
+      uses: actions/cache/save@v5
       with:
         path: /home/runner/.pebble-sdk/
         key: pebble-sdk-${{ vars.PEBBLE_SDK_VERSION }}
