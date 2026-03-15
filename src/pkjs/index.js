@@ -61,6 +61,7 @@ var renderState = {
   sendData: null,
   sendIndex: 0,
   totalBytes: 0,
+  sendToken: 0,
 };
 
 var gpsState = {
@@ -84,14 +85,21 @@ var tileRenderer = createTileRenderer({
 
 var geolocationUpdateInterval = null;
 
-function sendNextChunk() {
+function sendNextChunk(sendToken) {
+  // Ignore stale send loops after a new frame has started.
+  if (sendToken !== renderState.sendToken) {
+    return;
+  }
+
   if (!renderState.sendData) {
     return;
   }
 
   if (renderState.sendIndex * CHUNK_SIZE >= renderState.totalBytes) {
     console.log("Finished sending map bytes");
-    renderState.sendData = null;
+    if (sendToken === renderState.sendToken) {
+      renderState.sendData = null;
+    }
     return;
   }
 
@@ -100,7 +108,7 @@ function sendNextChunk() {
   var chunk = renderState.sendData.slice(offset, end);
 
   var dict = {
-    cmd: 2,
+    cmd: CMD_IMAGE_CHUNK,
     width: renderState.width,
     height: renderState.height,
     bytes_per_row: renderState.outputBytesPerRow,
@@ -114,14 +122,35 @@ function sendNextChunk() {
   Pebble.sendAppMessage(
     dict,
     function () {
+      if (sendToken !== renderState.sendToken) {
+        return;
+      }
       renderState.sendIndex += 1;
-      sendNextChunk();
+      sendNextChunk(sendToken);
     },
     function (err) {
+      if (sendToken !== renderState.sendToken) {
+        return;
+      }
       console.log("Chunk send failed, retrying: " + JSON.stringify(err));
-      setTimeout(sendNextChunk, 300);
+      setTimeout(function () {
+        sendNextChunk(sendToken);
+      }, 300);
     }
   );
+}
+
+function startChunkTransfer(frame) {
+  // Bump token so any previous in-flight send callbacks become no-ops.
+  renderState.sendToken += 1;
+  var sendToken = renderState.sendToken;
+
+  renderState.outputIsColor = frame.outputIsColor;
+  renderState.outputBytesPerRow = frame.outputBytesPerRow;
+  renderState.sendData = frame.packed;
+  renderState.sendIndex = 0;
+  renderState.totalBytes = frame.packed.length;
+  sendNextChunk(sendToken);
 }
 
 function renderTileToWatch() {
@@ -135,12 +164,7 @@ function renderTileToWatch() {
     config: config,
     gpsState: gpsState,
     onFrameReady: function (frame) {
-      renderState.outputIsColor = frame.outputIsColor;
-      renderState.outputBytesPerRow = frame.outputBytesPerRow;
-      renderState.sendData = frame.packed;
-      renderState.sendIndex = 0;
-      renderState.totalBytes = frame.packed.length;
-      sendNextChunk();
+      startChunkTransfer(frame);
     },
   });
 }
@@ -237,12 +261,7 @@ function renderErrorToWatch(message, icon = "⚡") {
       renderState: renderState,
       config: config,
       onFrameReady: function (frame) {
-        renderState.outputIsColor = frame.outputIsColor;
-        renderState.outputBytesPerRow = frame.outputBytesPerRow;
-        renderState.sendData = frame.packed;
-        renderState.sendIndex = 0;
-        renderState.totalBytes = frame.packed.length;
-        sendNextChunk();
+        startChunkTransfer(frame);
       },
     },
     message,
@@ -382,29 +401,31 @@ Pebble.addEventListener("webviewclosed", function (e) {
   if (newSettings.showGpxTrack) {
     config.showGpxTrack = newSettings.showGpxTrack.value;
   }
-  if (newSettings.gpxUrl.value && newSettings.gpxUrl.value.trim() !== "") {
+  if (
+    newSettings.gpxUrl.value &&
+    newSettings.gpxUrl.value.trim() !== "" &&
+    newSettings.gpxUrl.value.trim() !== config.gpxUrl
+  ) {
     console.log("GPX URL provided, fetching: " + newSettings.gpxUrl.value);
     var url = newSettings.gpxUrl.value.trim();
-    if (url !== config.gpxUrl) {
-      config.gpxPoints = [];
-      var request = new XMLHttpRequest();
-      request.open("GET", url, true);
-      request.onload = function () {
-        if (request.status >= 200 && request.status < 400) {
-          // Success!
-          var gpxText = request.responseText;
-          parseGpxTrackPointsAndSave(gpxText);
-          renderTileToWatch();
-        } else {
-          console.log("Failed to fetch GPX file, status: " + request.status);
-        }
-      };
-      request.onerror = function () {
-        console.log("Error fetching GPX file");
-      };
-      request.send();
-      config.gpxUrl = url;
-    }
+    config.gpxPoints = [];
+    var request = new XMLHttpRequest();
+    request.open("GET", url, true);
+    request.onload = function () {
+      if (request.status >= 200 && request.status < 400) {
+        // Success!
+        var gpxText = request.responseText;
+        parseGpxTrackPointsAndSave(gpxText);
+        renderTileToWatch();
+      } else {
+        console.log("Failed to fetch GPX file, status: " + request.status);
+      }
+    };
+    request.onerror = function () {
+      console.log("Error fetching GPX file");
+    };
+    request.send();
+    config.gpxUrl = url;
   } else if (
     newSettings.gpxText.value &&
     newSettings.gpxText.value.trim() !== "" &&
@@ -415,10 +436,9 @@ Pebble.addEventListener("webviewclosed", function (e) {
     parseGpxTrackPointsAndSave(newSettings.gpxText.value);
     renderTileToWatch();
     config.gpxText = newSettings.gpxText.value;
-  } else {
-    console.log("No GPX data provided or GPX data unchanged");
-    renderTileToWatch();
-    saveSettings();
   }
+  console.log("No GPX data provided or GPX data unchanged");
+  renderTileToWatch();
+  saveSettings();
   console.log("New settings: " + JSON.stringify(newSettings));
 });

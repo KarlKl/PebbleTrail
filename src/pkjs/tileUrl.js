@@ -2,7 +2,9 @@ try {
     var env = require("./env");
 } catch (e) {
     console.log("Could not load env variables " + JSON.stringify(e));
-    var env = {};
+    if (!env) {
+        env = {};
+    }
 }
 
 var TILE_URLS = {
