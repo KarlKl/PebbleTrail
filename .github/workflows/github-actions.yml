@@ -4,11 +4,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v6
+    - name: Write env.js
+      run: |
+        echo "module.exports = {STADIAMAPS_API_KEY: '${{ secrets.STADIAMAPS_API_KEY }}'}" > env.js
     - name: Install Pebble SDK
       run: |
         curl -LsSf https://astral.sh/uv/install.sh | sh
         uv tool install pebble-tool --python 3.13
+    - name: Install SDK
+      run: |
+        pebble sdk install ${{ vars.PEBBLE_SDK_VERSION }}
     - name: Build PBW
       run: |
         pebble build
@@ -17,3 +23,8 @@ jobs:
       with:
         name: pebbletrail-pbw
         path: build/pebbletrail.pbw
+    - name: Cache Pebble Tool
+      uses: actions/cache@v5
+      with:
+        path: /home/runner/.pebble-sdk/
+        key: pebble-sdk-${{ vars.PEBBLE_SDK_VERSION }}
