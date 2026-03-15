@@ -1,61 +1,60 @@
 {
-  "name": "pebble-trail",
-  "author": "Karl",
-  "version": "1.0.0",
-  "keywords": [
-    "pebble-app"
-  ],
-  "private": true,
-  "dependencies": {
-    "@rebble/clay": "^1.0.0"
-  },
-  "pebble": {
-    "capabilities": [
-      "location",
-      "configurable"
-    ],
-    "displayName": "PebbleTrail Map",
-    "shortName": "PebbleTrail",
-    "uuid": "28f143cc-56e1-4842-97d7-31c3bb7e8f3b",
-    "sdkVersion": "3",
-    "enableMultiJS": true,
-    "projectType": "native",
-    "targetPlatforms": [
-      "aplite",
-      "basalt",
-      "chalk",
-      "diorite",
-      "emery",
-      "flint",
-      "gabbro"
-    ],
-    "watchapp": {
-      "watchface": false
+    "author": "Karl",
+    "dependencies": {
+        "@rebble/clay": "^1.0.0"
     },
-    "messageKeys": [
-      "cmd",
-      "JSReady",
-      "showTimeOverlay",
-      "isCanvasSupported",
-      "width",
-      "height",
-      "bytes_per_row",
-      "is_color",
-      "total_bytes",
-      "chunk_index",
-      "chunk_offset",
-      "chunk_data",
-      "button_id"
+    "keywords": [
+        "pebble-app"
     ],
-    "resources": {
-      "media": [
-        {
-          "menuIcon": true,
-					"type": "bitmap",
-					"name": "IMAGE_MENU_ICON",
-					"file": "img/icon.png"
+    "name": "pebbletrail-map",
+    "pebble": {
+        "capabilities": [
+            "location",
+            "configurable"
+        ],
+        "displayName": "PebbleTrail Map",
+        "enableMultiJS": true,
+        "messageKeys": [
+            "cmd",
+            "JSReady",
+            "showTimeOverlay",
+            "isCanvasSupported",
+            "width",
+            "height",
+            "bytes_per_row",
+            "is_color",
+            "total_bytes",
+            "chunk_index",
+            "chunk_offset",
+            "chunk_data",
+            "button_id"
+        ],
+        "projectType": "native",
+        "resources": {
+            "media": [
+                {
+                    "file": "images/icon.png",
+                    "menuIcon": true,
+                    "name": "IMAGE_MENU_ICON",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                }
+            ]
+        },
+        "sdkVersion": "3",
+        "targetPlatforms": [
+            "aplite",
+            "basalt",
+            "chalk",
+            "diorite",
+            "emery",
+            "gabbro",
+            "flint"
+        ],
+        "uuid": "28f143cc-56e1-4842-97d7-31c3bb7e8f3b",
+        "watchapp": {
+            "watchface": false
         }
-      ]
-    }
-  }
+    },
+    "version": "1.0.0"
 }
