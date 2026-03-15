@@ -3,3 +3,4 @@ node_modules/
 .lock-waf_linux_build
 src/pkjs/env.js
 .trial/
+screenshots/

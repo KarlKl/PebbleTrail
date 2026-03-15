@@ -8,11 +8,11 @@ jobs:
     - name: Write env.js
       run: |
         echo "module.exports = {STADIAMAPS_API_KEY: '${{ secrets.STADIAMAPS_API_KEY }}'}" > env.js
-    - name: Install Pebble SDK
+    - name: Install Pebble CLI
       run: |
         curl -LsSf https://astral.sh/uv/install.sh | sh
         uv tool install pebble-tool --python 3.13
-    - name: Install SDK
+    - name: Install Pebble SDK
       run: |
         pebble sdk install ${{ vars.PEBBLE_SDK_VERSION }}
     - name: Build PBW
@@ -22,7 +22,7 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: pebbletrail-pbw
-        path: build/pebbletrail.pbw
+        path: build/PebbleTrail.pbw
     - name: Cache Pebble Tool
       uses: actions/cache@v5
       with:
