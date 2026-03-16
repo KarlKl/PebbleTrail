@@ -135,7 +135,7 @@ module.exports = [
       {
         type: "text",
         defaultValue:
-          "Enter the URL of a GPX file to have its track points displayed on the watchface. OR paste the gpx file as text. If both are provided, Text will be used.",
+          "Currently only one GPX Track can be displayed at a time. Enter the URL of a GPX file OR paste the gpx file as text to have its track points displayed on the watchface. If both are provided, URL will be used.",
       },
       {
         type: "input",
