@@ -1,4 +1,5 @@
 try {
+  // window.MOCK = require("./mock");
   var geo = require("./geo");
   var imagePacking = require("./imagePacking");
   var createTileCache = require("./tileCache").createTileCache;
@@ -158,6 +159,17 @@ function renderTileToWatch() {
   if (gpsState.latitude === undefined || gpsState.longitude === undefined) {
     console.log("GPS position not available, cannot render tile");
     renderErrorToWatch("GPS position\nnot available", "⌖");
+    return;
+  }
+  if (typeof(MOCK) !== "undefined") {
+    console.log("MOCKING ENABLED, sending test frame");
+    MOCK.sendTestFrame(
+      startChunkTransfer,
+      "checkerboard",
+      renderState.width,
+      renderState.height,
+      renderState.isColor
+    );
     return;
   }
   tileRenderer.render({

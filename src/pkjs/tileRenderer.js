@@ -43,6 +43,9 @@ function createTileRenderer(options) {
   }
 
   function isCanvasSupported() {
+    if (typeof(MOCK) !== "undefined") {
+      return true;
+    }
     return ensureCanvas(1, 1) !== null;
   }
 
@@ -93,7 +96,14 @@ function createTileRenderer(options) {
     };
   }
 
-  function drawGpxTrack(ctx, gpxPoints, gpxLineStyle, zoom, topLeftWorldX, topLeftWorldY) {
+  function drawGpxTrack(
+    ctx,
+    gpxPoints,
+    gpxLineStyle,
+    zoom,
+    topLeftWorldX,
+    topLeftWorldY
+  ) {
     if (!gpxPoints || gpxPoints.length === 0) {
       return;
     }
@@ -119,15 +129,28 @@ function createTileRenderer(options) {
   function drawOverlays(ctx, params) {
     var config = params.config;
     var zoom = params.zoom;
-    var showZoomLevel = config.showZoomLevel === undefined ? false : config.showZoomLevel;
-    var showZoomButtons = config.showZoomButtons === undefined ? true : config.showZoomButtons;
+    var showZoomLevel =
+      config.showZoomLevel === undefined ? false : config.showZoomLevel;
+    var showZoomButtons =
+      config.showZoomButtons === undefined ? true : config.showZoomButtons;
     var topLeftWorldX = params.topLeftWorldX;
     var topLeftWorldY = params.topLeftWorldY;
     var centerWorldX = params.centerWorldX;
     var centerWorldY = params.centerWorldY;
 
-    if (config.showGpxTrack && config.gpxPoints && config.gpxPoints.length > 0) {
-      drawGpxTrack(ctx, config.gpxPoints, config.gpxLineStyle, zoom, topLeftWorldX, topLeftWorldY);
+    if (
+      config.showGpxTrack &&
+      config.gpxPoints &&
+      config.gpxPoints.length > 0
+    ) {
+      drawGpxTrack(
+        ctx,
+        config.gpxPoints,
+        config.gpxLineStyle,
+        zoom,
+        topLeftWorldX,
+        topLeftWorldY
+      );
       ctx.strokeStyle = "#" + (config.gpxTrackColor || "0000FF");
       ctx.lineWidth = 3;
       ctx.stroke();
@@ -159,7 +182,7 @@ function createTileRenderer(options) {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      ctx.fillText("＋", params.width - 10, params.height / 12 * 2);
+      ctx.fillText("＋", params.width - 10, (params.height / 12) * 2);
       ctx.fillText("－", params.width - 10, (params.height / 12) * 10);
     }
   }

@@ -172,13 +172,17 @@ module.exports = [
         type: "toggle",
         messageKey: "showZoomLevel",
         defaultValue: false,
-        label: "Show Zoom Level",
+        label: "Show Zoom Level*",
       },
       {
         type: "toggle",
         messageKey: "showZoomButtons",
         defaultValue: true,
-        label: "Show Zoom Buttons",
+        label: "Show Zoom Buttons*",
+      },
+      {
+        type: "text",
+        defaultValue: "*Not supported on round watches."
       },
     ],
   },

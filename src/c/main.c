@@ -330,12 +330,58 @@ static void prv_canvas_update_proc(Layer *layer, GContext *ctx)
     return;
   }
 
-  uint8_t *fb_data = gbitmap_get_data(fb);
+  const GBitmapFormat fb_format = gbitmap_get_format(fb);
+  const bool fb_is_circular = fb_format == GBitmapFormat8BitCircular;
   const uint16_t fb_row_bytes = gbitmap_get_bytes_per_row(fb);
   const uint16_t copy_height = s_image_height < bounds.size.h ? s_image_height : bounds.size.h;
 
-  if (s_image_is_color)
+  if (fb_is_circular)
   {
+    const uint16_t copy_width = s_image_width < bounds.size.w ? s_image_width : bounds.size.w;
+    for (uint16_t y = 0; y < copy_height; y++)
+    {
+      GBitmapDataRowInfo row_info = gbitmap_get_data_row_info(fb, y);
+      if (!row_info.data)
+      {
+        continue;
+      }
+
+      int16_t min_x = row_info.min_x;
+      if (min_x < 0)
+      {
+        min_x = 0;
+      }
+
+      int16_t max_x = row_info.max_x;
+      if (max_x >= copy_width)
+      {
+        max_x = copy_width - 1;
+      }
+
+      if (min_x > max_x)
+      {
+        continue;
+      }
+
+      const uint8_t *src_row = s_image_buffer + y * s_image_row_bytes;
+      if (s_image_is_color)
+      {
+        memcpy(row_info.data + min_x, src_row + min_x, (size_t)(max_x - min_x + 1));
+      }
+      else
+      {
+        for (int16_t x = min_x; x <= max_x; x++)
+        {
+          const uint8_t src = src_row[x >> 3];
+          const bool bit = ((src >> (7 - (x & 7))) & 0x1) != 0;
+          row_info.data[x] = bit ? 0xFF : 0xC0;
+        }
+      }
+    }
+  }
+  else if (s_image_is_color)
+  {
+    uint8_t *fb_data = gbitmap_get_data(fb);
     const uint16_t copy_row_bytes = s_image_width;
     const uint16_t safe_row_bytes = copy_row_bytes < fb_row_bytes ? copy_row_bytes : fb_row_bytes;
     for (uint16_t y = 0; y < copy_height; y++)
@@ -345,6 +391,7 @@ static void prv_canvas_update_proc(Layer *layer, GContext *ctx)
   }
   else if (!s_device_is_color)
   {
+    uint8_t *fb_data = gbitmap_get_data(fb);
     const uint16_t safe_row_bytes = s_image_row_bytes < fb_row_bytes ? s_image_row_bytes : fb_row_bytes;
     for (uint16_t y = 0; y < copy_height; y++)
     {
@@ -353,6 +400,7 @@ static void prv_canvas_update_proc(Layer *layer, GContext *ctx)
   }
   else
   {
+    uint8_t *fb_data = gbitmap_get_data(fb);
     const uint16_t copy_width = s_image_width < bounds.size.w ? s_image_width : bounds.size.w;
     for (uint16_t y = 0; y < copy_height; y++)
     {
