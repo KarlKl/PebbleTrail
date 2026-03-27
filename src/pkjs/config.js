@@ -81,8 +81,8 @@ module.exports = [
         defaultValue: 60,
         label: "Tile Update Interval (seconds)",
         min: 10,
-        max: 300,
-        step: 10,
+        max: 1800,
+        step: 20,
       },
       {
         type: "text",
@@ -109,6 +109,17 @@ module.exports = [
         messageKey: "showGpxTrack",
         defaultValue: true,
         label: "Show GPX Track",
+      },
+      {
+        type: "toggle",
+        messageKey: "cacheGpxTrack",
+        defaultValue: false,
+        label: "Cache Tiles Along GPX Track",
+      },
+      {
+        type: "text",
+        defaultValue:
+          "When enabled, all map tiles covering the GPX route are pre-downloaded in the zoom level specified above and stored on the phone. The map will then work without an internet connection while you are out. Disabling this option clears the cached tiles.",
       },
       {
         type: "color",

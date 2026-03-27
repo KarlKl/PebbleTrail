@@ -44,6 +44,7 @@ var config = {
   showZoomButtons: true,
   showCurrentLocationDot: true,
   showGpxTrack: true,
+  cacheGpxTrack: false,
   gpxUrl: "",
   gpxText: "",
   gpxPoints: [],
@@ -268,6 +269,31 @@ function getCurrentPosition() {
   );
 }
 
+function prefetchGpxTiles() {
+  if (!config.cacheGpxTrack || !config.gpxPoints || config.gpxPoints.length === 0) {
+    return;
+  }
+  var provider = config.tileProvider || "osm";
+  var tiles = geo.getTilesAlongRoute(config.gpxPoints, config.zoomLevel, 1);
+  console.log(
+    "Prefetching " + tiles.length + " tiles along GPX route at zoom " +
+    config.zoomLevel + " (provider: " + provider + ")"
+  );
+  tileCache.prefetchRoute(
+    provider,
+    config.zoomLevel,
+    tiles,
+    function (done, total) {
+      if (done === 1 || done % 10 === 0 || done === total) {
+        console.log("Route tile prefetch: " + done + "/" + total);
+      }
+    },
+    function (success, total) {
+      console.log("Route tile prefetch complete: " + success + "/" + total + " tiles cached");
+    }
+  );
+}
+
 function renderErrorToWatch(message, icon = "⚡") {
   tileRenderer.renderError(
     {
@@ -353,12 +379,20 @@ Pebble.addEventListener("ready", function () {
     var options = JSON.parse(localStorage.settings);
     options.showCurrentLocationDot = options.showCurrentLocationDot === true;
     options.enforceMonochrome = options.enforceMonochrome === true;
+    options.showGpxTrack = options.showGpxTrack === true;
+    options.cacheGpxTrack = options.cacheGpxTrack === true;
+    options.showTime = options.showTime === true;
+    options.showZoomButtons = options.showZoomButtons === true;
+    options.showZoomLevel = options.showZoomLevel === true;
+    options.onlyUpdateOnSelectPress = options.onlyUpdateOnSelectPress === true;
     options.updateIntervalMs *= 1;
     options.zoomLevel *= 1;
     options.gpxPoints = options.gpxPoints || [];
     Object.assign(config, options);
     console.log("Loaded settings from localStorage: " + JSON.stringify(config));
   }
+
+  prefetchGpxTiles();
 
   var dict = {
     cmd: 1,
@@ -434,6 +468,13 @@ Pebble.addEventListener("webviewclosed", function (e) {
   if (newSettings.showGpxTrack) {
     config.showGpxTrack = newSettings.showGpxTrack.value;
   }
+  if (newSettings.cacheGpxTrack !== undefined) {
+    var wasEnabled = config.cacheGpxTrack;
+    config.cacheGpxTrack = newSettings.cacheGpxTrack.value;
+    if (wasEnabled && !config.cacheGpxTrack) {
+      tileCache.clearRouteCache();
+    }
+  }
   if (
     newSettings.gpxUrl.value &&
     newSettings.gpxUrl.value.trim() !== "" &&
@@ -449,6 +490,7 @@ Pebble.addEventListener("webviewclosed", function (e) {
         // Success!
         var gpxText = request.responseText;
         parseGpxTrackPointsAndSave(gpxText);
+        prefetchGpxTiles();
         renderTileToWatch();
       } else {
         console.log("Failed to fetch GPX file, status: " + request.status);
@@ -467,6 +509,7 @@ Pebble.addEventListener("webviewclosed", function (e) {
     console.log("GPX Text provided, parsing");
     config.gpxPoints = [];
     parseGpxTrackPointsAndSave(newSettings.gpxText.value);
+    prefetchGpxTiles();
     renderTileToWatch();
     config.gpxText = newSettings.gpxText.value;
   }
