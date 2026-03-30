@@ -154,6 +154,100 @@ static bool prv_decode_color_rle2_to_raw(const uint8_t *src,
   return di == dst_len;
 }
 
+// Decode mono bit-RLE stream (compression_format=2):
+// byte0 bit0=start color (0 black, 1 white)
+// then 2-bit tokens:
+//   00/01/10 => runs 1/2/3
+//   11 + 8-bit ext:
+//     ext=0 => continuation run 258 (do not toggle color)
+//     ext=1..255 => terminal run ext+3 (4..258), then toggle color
+static bool prv_decode_mono_bitrle2_to_packed(const uint8_t *src,
+                                              size_t src_len,
+                                              uint8_t *dst,
+                                              uint16_t width,
+                                              uint16_t height,
+                                              uint16_t row_bytes)
+{
+  if (src_len < 1)
+  {
+    return false;
+  }
+
+  memset(dst, 0, (size_t)row_bytes * height);
+
+  const uint8_t start_color = src[0] & 0x01;
+  uint8_t color = start_color;
+  uint32_t total_pixels = (uint32_t)width * (uint32_t)height;
+  uint32_t pixel_index = 0;
+  uint32_t bit_pos = 8; // Skip header byte
+  uint32_t total_bits = (uint32_t)src_len * 8;
+
+  while (pixel_index < total_pixels)
+  {
+    if (bit_pos + 2 > total_bits)
+    {
+      return false;
+    }
+
+    uint8_t token = 0;
+    for (uint8_t i = 0; i < 2; i++)
+    {
+      uint8_t byte = src[bit_pos >> 3];
+      uint8_t bit = (byte >> (7 - (bit_pos & 7))) & 0x01;
+      token = (uint8_t)((token << 1) | bit);
+      bit_pos++;
+    }
+
+    uint32_t run = token + 1;
+    bool toggle_after_run = true;
+    if (token == 3)
+    {
+      if (bit_pos + 8 > total_bits)
+      {
+        return false;
+      }
+
+      uint8_t ext = 0;
+      for (uint8_t i = 0; i < 8; i++)
+      {
+        uint8_t byte = src[bit_pos >> 3];
+        uint8_t bit = (byte >> (7 - (bit_pos & 7))) & 0x01;
+        ext = (uint8_t)((ext << 1) | bit);
+        bit_pos++;
+      }
+      if (ext == 0)
+      {
+        run = 258;
+        toggle_after_run = false;
+      }
+      else
+      {
+        run = (uint32_t)ext + 3;
+      }
+    }
+
+    for (uint32_t i = 0; i < run && pixel_index < total_pixels; i++)
+    {
+      if (color)
+      {
+        uint16_t x = (uint16_t)(pixel_index % width);
+        uint16_t y = (uint16_t)(pixel_index / width);
+        size_t byte_index = (size_t)y * row_bytes + (x >> 3);
+        uint8_t bit_index = (uint8_t)(7 - (x & 7));
+        dst[byte_index] |= (uint8_t)(1u << bit_index);
+      }
+      pixel_index++;
+    }
+
+    if (toggle_after_run)
+    {
+      color = (uint8_t)(color ? 0 : 1);
+    }
+  }
+
+  return true;
+}
+
 static void prv_request_render(void)
 {
   if (!s_phone_connected)
@@ -354,6 +448,37 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context)
         s_image_buffer = decoded;
         s_image_buffer_size = decoded_size;
         s_image_row_bytes = s_image_width;
+      }
+      else if (!s_image_is_color && s_compression_format == 2)
+      {
+        size_t decoded_size = (size_t)s_image_row_bytes * (size_t)s_image_height;
+        uint8_t *decoded = malloc(decoded_size);
+        if (!decoded)
+        {
+          APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to allocate decoded mono buffer");
+          prv_reset_image_state();
+          return;
+        }
+
+        bool ok = prv_decode_mono_bitrle2_to_packed(
+            s_image_buffer,
+            s_image_buffer_size,
+            decoded,
+            s_image_width,
+            s_image_height,
+            s_image_row_bytes);
+
+        if (!ok)
+        {
+          APP_LOG(APP_LOG_LEVEL_ERROR, "Invalid monochrome compressed frame");
+          free(decoded);
+          prv_reset_image_state();
+          return;
+        }
+
+        free(s_image_buffer);
+        s_image_buffer = decoded;
+        s_image_buffer_size = decoded_size;
       }
 
       s_image_ready = true;

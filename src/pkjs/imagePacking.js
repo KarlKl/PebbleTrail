@@ -84,8 +84,99 @@ function packColorRle2Bit(imageData, width, height) {
   return new Uint8Array(out);
 }
 
+// Monochrome bit-run codec (approach 2):
+// - first byte: start color bit (0 black, 1 white)
+// - then token stream:
+//   2-bit token 00/01/10 => run lengths 1/2/3
+//   2-bit token 11 + next 8 bits:
+//     ext=0 => continuation chunk of 258 pixels (do not toggle color)
+//     ext=1..255 => terminal run of ext+3 pixels (4..258), then toggle color
+// Colors toggle after each terminal run.
+function packMonochromeBitRle2(imageData, width, height) {
+  var data = imageData.data;
+  var pixelCount = width * height;
+  if (pixelCount === 0) {
+    return new Uint8Array([0]);
+  }
+
+  var bitValues = new Uint8Array(pixelCount);
+  for (var p = 0; p < pixelCount; p++) {
+    var idx = p * 4;
+    var r = data[idx];
+    var g = data[idx + 1];
+    var b = data[idx + 2];
+    var luminance = r * 0.2126 + g * 0.7152 + b * 0.0722;
+    bitValues[p] = luminance > LUMINANCE_THRESHOLD ? 1 : 0;
+  }
+
+  var out = [];
+  var curByte = 0;
+  var bitsUsed = 0;
+
+  function writeBits(value, bitCount) {
+    for (var i = bitCount - 1; i >= 0; i--) {
+      var bit = (value >> i) & 1;
+      curByte = (curByte << 1) | bit;
+      bitsUsed += 1;
+      if (bitsUsed === 8) {
+        out.push(curByte);
+        curByte = 0;
+        bitsUsed = 0;
+      }
+    }
+  }
+
+  var firstBit = bitValues[0];
+  out.push(firstBit); // header byte: start color in bit0
+
+  var runColor = firstBit;
+  var runLength = 0;
+
+  function emitRun(length) {
+    while (length > 0) {
+      if (length <= 3) {
+        writeBits(length - 1, 2);
+        length = 0;
+      } else {
+        if (length > 258) {
+          // Escape ext=0 means 258 pixels and no color toggle (continuation).
+          writeBits(3, 2);
+          writeBits(0, 8);
+          length -= 258;
+        } else {
+          // Escape ext=1..255 means final run of 4..258 pixels.
+          writeBits(3, 2);
+          writeBits(length - 3, 8);
+          length = 0;
+        }
+      }
+    }
+  }
+
+  for (var pixel = 0; pixel < pixelCount; pixel++) {
+    var bit = bitValues[pixel];
+    if (bit === runColor) {
+      runLength += 1;
+      continue;
+    }
+
+    emitRun(runLength);
+    runColor = bit;
+    runLength = 1;
+  }
+
+  emitRun(runLength);
+
+  if (bitsUsed > 0) {
+    out.push(curByte << (8 - bitsUsed));
+  }
+
+  return new Uint8Array(out);
+}
+
 module.exports = {
   packMonochrome: packMonochrome,
+  packMonochromeBitRle2: packMonochromeBitRle2,
   packColor: packColor,
   packColorRle2Bit: packColorRle2Bit,
 };

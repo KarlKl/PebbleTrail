@@ -98,12 +98,20 @@ function generateTestFrame(patternType, width, height, isColor) {
     packed = imagePacking.packColorRle2Bit(imageData, width, height);
     compressionFormat = 1;
   } else {
-    packed = imagePacking.packMonochrome(
+    const monoRaw = imagePacking.packMonochrome(
       imageData,
       width,
       height,
       outputFormat.outputBytesPerRow
     );
+    const monoRle = imagePacking.packMonochromeBitRle2(imageData, width, height);
+    if (monoRle.length < monoRaw.length) {
+      packed = monoRle;
+      compressionFormat = 2;
+    } else {
+      packed = monoRaw;
+      compressionFormat = 0;
+    }
   }
 
   return {

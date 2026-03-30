@@ -196,13 +196,23 @@ function createTileRenderer(options) {
       };
     }
 
+    var monoRaw = imagePacking.packMonochrome(
+      imageData,
+      width,
+      height,
+      outputFormat.outputBytesPerRow
+    );
+    var monoRle = imagePacking.packMonochromeBitRle2(imageData, width, height);
+
+    if (monoRle.length < monoRaw.length) {
+      return {
+        packed: monoRle,
+        compressionFormat: 2,
+      };
+    }
+
     return {
-      packed: imagePacking.packMonochrome(
-        imageData,
-        width,
-        height,
-        outputFormat.outputBytesPerRow
-      ),
+      packed: monoRaw,
       compressionFormat: 0,
     };
   }
