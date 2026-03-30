@@ -17,6 +17,7 @@ static uint16_t s_image_row_bytes;
 static bool s_device_is_color;
 static bool s_image_is_color;
 static bool s_image_ready;
+static uint8_t s_compression_format;
 static AppTimer *s_retry_timer;
 static AppTimer *s_time_overlay_timer;
 
@@ -118,12 +119,39 @@ static void prv_reset_image_state(void)
 {
   s_received_bytes = 0;
   s_image_ready = false;
+  s_compression_format = 0;
   if (s_image_buffer)
   {
     free(s_image_buffer);
     s_image_buffer = NULL;
     s_image_buffer_size = 0;
   }
+}
+
+// Decode 2-bit run / 6-bit color stream into 8-bit Pebble color bytes.
+// Byte format: [run-1:2 bits][color6:6 bits], where run is 1..4.
+static bool prv_decode_color_rle2_to_raw(const uint8_t *src,
+                                         size_t src_len,
+                                         uint8_t *dst,
+                                         size_t dst_len)
+{
+  size_t si = 0;
+  size_t di = 0;
+
+  while (si < src_len && di < dst_len)
+  {
+    uint8_t packed = src[si++];
+    uint8_t run = (uint8_t)((packed >> 6) & 0x03) + 1;
+    uint8_t color = (uint8_t)(0xC0 | (packed & 0x3F));
+
+    for (uint8_t i = 0; i < run && di < dst_len; i++)
+    {
+      dst[di++] = color;
+    }
+  }
+
+  // Valid stream must fill exactly the expected number of pixels.
+  return di == dst_len;
 }
 
 static void prv_request_render(void)
@@ -231,6 +259,7 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context)
     Tuple *height_t = dict_find(iter, MESSAGE_KEY_height);
     Tuple *row_bytes_t = dict_find(iter, MESSAGE_KEY_bytes_per_row);
     Tuple *is_color_t = dict_find(iter, MESSAGE_KEY_is_color);
+    Tuple *compression_t = dict_find(iter, MESSAGE_KEY_compression_format);
     Tuple *total_t = dict_find(iter, MESSAGE_KEY_total_bytes);
     Tuple *offset_t = dict_find(iter, MESSAGE_KEY_chunk_offset);
     Tuple *data_t = dict_find(iter, MESSAGE_KEY_chunk_data);
@@ -257,10 +286,18 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context)
     {
       s_image_is_color = is_color_t->value->uint8 != 0;
     }
+    if (compression_t)
+    {
+      s_compression_format = compression_t->value->uint8;
+    }
 
     if (total_t && (!s_image_buffer || s_image_buffer_size != total_t->value->uint32))
     {
       prv_reset_image_state();
+      if (compression_t)
+      {
+        s_compression_format = compression_t->value->uint8;
+      }
       s_image_buffer_size = total_t->value->uint32;
       s_image_buffer = malloc(s_image_buffer_size);
       if (!s_image_buffer)
@@ -288,6 +325,37 @@ static void prv_inbox_received_handler(DictionaryIterator *iter, void *context)
 
     if (s_received_bytes >= s_image_buffer_size)
     {
+      if (s_image_is_color && s_compression_format == 1)
+      {
+        size_t decoded_size = (size_t)s_image_width * (size_t)s_image_height;
+        uint8_t *decoded = malloc(decoded_size);
+        if (!decoded)
+        {
+          APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to allocate decoded color buffer");
+          prv_reset_image_state();
+          return;
+        }
+
+        bool ok = prv_decode_color_rle2_to_raw(
+            s_image_buffer,
+            s_image_buffer_size,
+            decoded,
+            decoded_size);
+
+        if (!ok)
+        {
+          APP_LOG(APP_LOG_LEVEL_ERROR, "Invalid color compressed frame");
+          free(decoded);
+          prv_reset_image_state();
+          return;
+        }
+
+        free(s_image_buffer);
+        s_image_buffer = decoded;
+        s_image_buffer_size = decoded_size;
+        s_image_row_bytes = s_image_width;
+      }
+
       s_image_ready = true;
       layer_set_hidden(text_layer_get_layer(s_status_layer), true);
       layer_mark_dirty(s_canvas_layer);

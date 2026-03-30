@@ -93,8 +93,10 @@ function generateTestFrame(patternType, width, height, isColor) {
   };
 
   let packed;
+  let compressionFormat = 0;
   if (isColor) {
-    packed = imagePacking.packColor(imageData, width, height);
+    packed = imagePacking.packColorRle2Bit(imageData, width, height);
+    compressionFormat = 1;
   } else {
     packed = imagePacking.packMonochrome(
       imageData,
@@ -106,6 +108,7 @@ function generateTestFrame(patternType, width, height, isColor) {
 
   return {
     packed: packed,
+    compressionFormat: compressionFormat,
     outputIsColor: outputFormat.outputIsColor,
     outputBytesPerRow: outputFormat.outputBytesPerRow,
   };

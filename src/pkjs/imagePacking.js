@@ -53,7 +53,39 @@ function packColor(imageData, width, height) {
   return packed;
 }
 
+// Color RLE format per byte:
+// top 2 bits = run length minus 1 (00->1, 01->2, 10->3, 11->4)
+// low 6 bits = Pebble color payload (RR GG BB)
+function packColorRle2Bit(imageData, width, height) {
+  var data = imageData.data;
+  var pixelCount = width * height;
+  var out = [];
+  var pixel = 0;
+
+  while (pixel < pixelCount) {
+    var idx = pixel * 4;
+    var color6 = rgbaToPebbleColor(data[idx], data[idx + 1], data[idx + 2]) & 0x3f;
+    var run = 1;
+
+    while (run < 4 && pixel + run < pixelCount) {
+      var nextIdx = (pixel + run) * 4;
+      var nextColor6 =
+        rgbaToPebbleColor(data[nextIdx], data[nextIdx + 1], data[nextIdx + 2]) & 0x3f;
+      if (nextColor6 !== color6) {
+        break;
+      }
+      run += 1;
+    }
+
+    out.push(((run - 1) << 6) | color6);
+    pixel += run;
+  }
+
+  return new Uint8Array(out);
+}
+
 module.exports = {
   packMonochrome: packMonochrome,
   packColor: packColor,
+  packColorRle2Bit: packColorRle2Bit,
 };

@@ -61,6 +61,7 @@ var renderState = {
   isColor: false,
   outputBytesPerRow: 0,
   outputIsColor: false,
+  compressionFormat: 0,
   sendData: null,
   sendIndex: 0,
   totalBytes: 0,
@@ -116,6 +117,7 @@ function sendNextChunk(sendToken) {
     height: renderState.height,
     bytes_per_row: renderState.outputBytesPerRow,
     is_color: renderState.outputIsColor ? 1 : 0,
+    compression_format: renderState.compressionFormat,
     total_bytes: renderState.totalBytes,
     chunk_index: renderState.sendIndex,
     chunk_offset: offset,
@@ -150,6 +152,7 @@ function startChunkTransfer(frame) {
 
   renderState.outputIsColor = frame.outputIsColor;
   renderState.outputBytesPerRow = frame.outputBytesPerRow;
+  renderState.compressionFormat = frame.compressionFormat || 0;
   renderState.sendData = frame.packed;
   renderState.sendIndex = 0;
   renderState.totalBytes = frame.packed.length;

@@ -190,15 +190,21 @@ function createTileRenderer(options) {
   function packCanvas(ctx, width, height, outputFormat) {
     var imageData = ctx.getImageData(0, 0, width, height);
     if (outputFormat.outputIsColor) {
-      return imagePacking.packColor(imageData, width, height);
+      return {
+        packed: imagePacking.packColorRle2Bit(imageData, width, height),
+        compressionFormat: 1,
+      };
     }
 
-    return imagePacking.packMonochrome(
-      imageData,
-      width,
-      height,
-      outputFormat.outputBytesPerRow
-    );
+    return {
+      packed: imagePacking.packMonochrome(
+        imageData,
+        width,
+        height,
+        outputFormat.outputBytesPerRow
+      ),
+      compressionFormat: 0,
+    };
   }
 
   function render(params) {
@@ -271,8 +277,10 @@ function createTileRenderer(options) {
         centerWorldY: viewport.centerWorldY,
       });
 
+      var packedFrame = packCanvas(ctx, width, height, outputFormat);
       params.onFrameReady({
-        packed: packCanvas(ctx, width, height, outputFormat),
+        packed: packedFrame.packed,
+        compressionFormat: packedFrame.compressionFormat,
         outputIsColor: outputFormat.outputIsColor,
         outputBytesPerRow: outputFormat.outputBytesPerRow,
       });
@@ -352,8 +360,10 @@ function createTileRenderer(options) {
       ctx.fillText(lines[i], width / 2, height / 2 - 10 + i * 18);
     }
 
+    var packedFrame = packCanvas(ctx, width, height, outputFormat);
     params.onFrameReady({
-      packed: packCanvas(ctx, width, height, outputFormat),
+      packed: packedFrame.packed,
+      compressionFormat: packedFrame.compressionFormat,
       outputIsColor: outputFormat.outputIsColor,
       outputBytesPerRow: outputFormat.outputBytesPerRow,
     });

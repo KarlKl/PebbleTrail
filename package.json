@@ -37,6 +37,7 @@
             "chunk_index",
             "chunk_offset",
             "chunk_data",
+            "compression_format",
             "button_id"
         ],
         "projectType": "native",
