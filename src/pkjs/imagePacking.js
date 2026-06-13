@@ -32,7 +32,7 @@ function packMonochrome(imageData, width, height, bytesPerRow) {
       var bit = luminance > LUMINANCE_THRESHOLD ? 1 : 0;
       if (bit) {
         var byteIndex = y * bytesPerRow + (x >> 3);
-        var bitIndex = 7 - (x & 7);
+        var bitIndex = (x & 7);
         packed[byteIndex] |= 1 << bitIndex;
       }
     }

@@ -233,7 +233,7 @@ static bool prv_decode_mono_bitrle2_to_packed(const uint8_t *src,
         uint16_t x = (uint16_t)(pixel_index % width);
         uint16_t y = (uint16_t)(pixel_index / width);
         size_t byte_index = (size_t)y * row_bytes + (x >> 3);
-        uint8_t bit_index = (uint8_t)(7 - (x & 7));
+        uint8_t bit_index = (uint8_t)(x & 7);
         dst[byte_index] |= (uint8_t)(1u << bit_index);
       }
       pixel_index++;
@@ -566,7 +566,7 @@ static void prv_canvas_update_proc(Layer *layer, GContext *ctx)
         for (int16_t x = min_x; x <= max_x; x++)
         {
           const uint8_t src = src_row[x >> 3];
-          const bool bit = ((src >> (7 - (x & 7))) & 0x1) != 0;
+          const bool bit = ((src >> (x & 7)) & 0x1) != 0;
           row_info.data[x] = bit ? 0xFF : 0xC0;
         }
       }
@@ -602,7 +602,7 @@ static void prv_canvas_update_proc(Layer *layer, GContext *ctx)
       for (uint16_t x = 0; x < copy_width; x++)
       {
         const uint8_t src = src_row[x >> 3];
-        const bool bit = ((src >> (7 - (x & 7))) & 0x1) != 0;
+        const bool bit = ((src >> (x & 7)) & 0x1) != 0;
         dst_row[x] = bit ? 0xFF : 0xC0;
       }
     }
