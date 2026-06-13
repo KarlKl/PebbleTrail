@@ -48,6 +48,15 @@ module.exports = [
         max: 20,
         step: 1,
       },
+      {
+        type: "slider",
+        messageKey: "luminanceThreshold",
+        defaultValue: 190,
+        label: "B&W Luminance Threshold",
+        min: 0,
+        max: 255,
+        step: 5,
+      },
     ],
   },
   {
