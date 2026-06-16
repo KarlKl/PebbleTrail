@@ -1,4 +1,8 @@
-const LUMINANCE_THRESHOLD = 190; // higher = more likely to be black, lower = more likely to be white
+var luminanceThreshold = 190; // higher = more likely to be black, lower = more likely to be white
+
+function setLuminanceThreshold(val) {
+  luminanceThreshold = val;
+}
 
 function quantize2(value) {
   var v = Math.floor((value + 42) / 85);
@@ -29,10 +33,10 @@ function packMonochrome(imageData, width, height, bytesPerRow) {
       var g = data[idx + 1];
       var b = data[idx + 2];
       var luminance = r * 0.2126 + g * 0.7152 + b * 0.0722;
-      var bit = luminance > LUMINANCE_THRESHOLD ? 1 : 0;
+      var bit = luminance > luminanceThreshold ? 1 : 0;
       if (bit) {
         var byteIndex = y * bytesPerRow + (x >> 3);
-        var bitIndex = 7 - (x & 7);
+        var bitIndex = (x & 7);
         packed[byteIndex] |= 1 << bitIndex;
       }
     }
@@ -106,7 +110,7 @@ function packMonochromeBitRle2(imageData, width, height) {
     var g = data[idx + 1];
     var b = data[idx + 2];
     var luminance = r * 0.2126 + g * 0.7152 + b * 0.0722;
-    bitValues[p] = luminance > LUMINANCE_THRESHOLD ? 1 : 0;
+    bitValues[p] = luminance > luminanceThreshold ? 1 : 0;
   }
 
   var out = [];
@@ -175,6 +179,7 @@ function packMonochromeBitRle2(imageData, width, height) {
 }
 
 module.exports = {
+  setLuminanceThreshold: setLuminanceThreshold,
   packMonochrome: packMonochrome,
   packMonochromeBitRle2: packMonochromeBitRle2,
   packColor: packColor,

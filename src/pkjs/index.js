@@ -40,6 +40,8 @@ var config = {
   updateIntervalMs: 15000,
   onlyUpdateOnSelectPress: false,
   zoomLevel: 16,
+  luminanceThreshold: 190,
+  baseLuminanceThreshold: 190,
   showZoomLevel: false,
   showZoomButtons: true,
   showCurrentLocationDot: true,
@@ -225,6 +227,26 @@ function handleButtonClick(buttonId) {
     renderTileToWatch();
   } else if (buttonId === BTN_SELECT) {
     console.log("Select button clicked");
+    var isMono = !renderState.isColor || config.enforceMonochrome;
+    if (isMono) {
+      var offsets = [-15, -5, 0, 5, 15];
+      var currentOffset = config.luminanceThreshold - config.baseLuminanceThreshold;
+      var closestIdx = 0;
+      var minDiff = Infinity;
+      for (var i = 0; i < offsets.length; i++) {
+        var diff = Math.abs(currentOffset - offsets[i]);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestIdx = i;
+        }
+      }
+      var nextIdx = (closestIdx + 1) % offsets.length;
+      var nextOffset = offsets[nextIdx];
+      config.luminanceThreshold = Math.max(0, Math.min(255, config.baseLuminanceThreshold + nextOffset));
+      imagePacking.setLuminanceThreshold(config.luminanceThreshold);
+      console.log("Rotated luminance threshold to: " + config.luminanceThreshold);
+      renderTileToWatch();
+    }
     getCurrentPosition();
   } else if (buttonId === BTN_DOWN) {
     config.zoomLevel = Math.max(ZOOM_LEVEL_MIN, config.zoomLevel - 1);
@@ -391,9 +413,21 @@ Pebble.addEventListener("ready", function () {
     options.updateIntervalMs *= 1;
     options.zoomLevel *= 1;
     options.gpxPoints = options.gpxPoints || [];
+    if (options.luminanceThreshold !== undefined) {
+      options.luminanceThreshold *= 1;
+    } else {
+      options.luminanceThreshold = 190;
+    }
+    if (options.baseLuminanceThreshold !== undefined) {
+      options.baseLuminanceThreshold *= 1;
+    } else {
+      options.baseLuminanceThreshold = options.luminanceThreshold;
+    }
+
     Object.assign(config, options);
     console.log("Loaded settings from localStorage: " + JSON.stringify(config));
   }
+  imagePacking.setLuminanceThreshold(config.luminanceThreshold);
 
   prefetchGpxTiles();
 
@@ -427,6 +461,11 @@ Pebble.addEventListener("webviewclosed", function (e) {
   var newSettings = clay.getSettings(e.response, false);
   config.showCurrentLocationDot = newSettings.showCurrentLocationDot.value;
   config.tileProvider = newSettings.tileProvider.value;
+  if (newSettings.luminanceThreshold) {
+    config.baseLuminanceThreshold = newSettings.luminanceThreshold.value * 1;
+    config.luminanceThreshold = config.baseLuminanceThreshold;
+    imagePacking.setLuminanceThreshold(config.luminanceThreshold);
+  }
   if (newSettings.onlyUpdateOnSelectPress) {
     config.onlyUpdateOnSelectPress = newSettings.onlyUpdateOnSelectPress.value;
     if (config.onlyUpdateOnSelectPress) {
