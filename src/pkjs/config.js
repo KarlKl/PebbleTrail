@@ -146,7 +146,7 @@ module.exports = [
       {
         type: "text",
         defaultValue:
-          "Currently only one GPX Track can be displayed at a time. Enter the URL of a GPX file OR paste the gpx file as text to have its track points displayed on the watchface. If both are provided, URL will be used.",
+          "Currently only one GPX Track can be displayed at a time. Enter the URL of a GPX file, paste the GPX file as text, or upload a GPX file from your phone. If a new URL is entered, it takes priority.",
       },
       {
         type: "input",
@@ -162,6 +162,13 @@ module.exports = [
         type: "input",
         messageKey: "gpxText",
         label: "GPX Text",
+        defaultValue: "",
+      },
+      {
+        // Hidden; filled by the upload button in configCustom.js
+        type: "input",
+        messageKey: "gpxFile",
+        label: "GPX File",
         defaultValue: "",
       },
     ],

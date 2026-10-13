@@ -10,7 +10,9 @@ PebbleTrail Map is a Pebble smartwatch application that provides real-time GPS t
 - Real-time GPS tracking
 - Map rendering with different map providers
 - GPX track display
-  - GPX tracks can be loaded from URL or text input
+  - GPX tracks can be loaded from URL, text input, or uploaded as a local file from the phone
+  - Uploaded/pasted tracks are simplified in the settings page (max. 1500 points) to keep the settings small
+  - Both `<trk>` tracks and `<rte>` routes are supported
 - Configurable settings for map appearance and behavior
 - Button interactions for zooming and updating the map
 
