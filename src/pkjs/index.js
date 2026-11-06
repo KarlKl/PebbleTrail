@@ -11,8 +11,10 @@ try {
   var Clay = require("@rebble/clay");
   // Load our Clay configuration file
   var clayConfig = require("./config");
+  // Custom function running inside the config page (GPX file upload)
+  var clayCustomFn = require("./configCustom");
   // Initialize Clay
-  var clay = new Clay(clayConfig, null, { autoHandleEvents: false });
+  var clay = new Clay(clayConfig, clayCustomFn, { autoHandleEvents: false });
 } catch (e) {
   console.log("Could not load dependencies " + JSON.stringify(e));
 }
@@ -34,6 +36,9 @@ const CMD_BUTTON_CLICK = 3;
 const CMD_SAVE_SETTINGS = 4;
 const CMD_UPDATE_TIME_OVERLAY = 5;
 
+// sentinel written by the config page "Remove GPX Track" button
+const GPX_CLEAR = "__clear__";
+
 // initial configuration values, can be overridden by saved settings in localStorage or by the configuration page
 var config = {
   tileProvider: undefined,
@@ -47,6 +52,7 @@ var config = {
   cacheGpxTrack: false,
   gpxUrl: "",
   gpxText: "",
+  gpxName: "",
   gpxPoints: [],
   gpxLineStyle: "[5,5]", // dashed by default for better visibility on monochrome watches
   gpxTrackColor: "0000FF", // blue by default
@@ -216,6 +222,63 @@ function parseGpxTrackPointsAndSave(gpxString) {
 
   setGpxPoints(points);
   return points;
+}
+
+function clearGpxTrack() {
+  console.log("Removing GPX track");
+  config.gpxUrl = "";
+  config.gpxText = "";
+  config.gpxName = "";
+  tileCache.clearRouteCache();
+  setGpxPoints([]);
+}
+
+function loadCompactGpxAndSave(payload) {
+  var track;
+  try {
+    track = gpx.parseCompactTrack(payload);
+  } catch (err) {
+    console.log("Error parsing uploaded GPX payload: " + err);
+    return false;
+  }
+  if (track.points.length === 0) {
+    console.log("Uploaded GPX contains no points");
+    return false;
+  }
+  console.log(
+    "Loaded uploaded GPX '" + track.name + "' with " + track.points.length + " points"
+  );
+  // an uploaded file replaces URL / text sources
+  config.gpxUrl = "";
+  config.gpxText = "";
+  config.gpxName = track.name;
+  setGpxPoints(track.points);
+  return true;
+}
+
+// Removes a (potentially large) value from Clay's persisted settings so it
+// is not embedded in the config page URL again next time.
+function clearClaySetting(key) {
+  try {
+    var stored = JSON.parse(localStorage.getItem("clay-settings") || "{}");
+    if (stored && stored[key] !== undefined) {
+      if (stored[key] && typeof stored[key] === "object") {
+        stored[key].value = "";
+      } else {
+        stored[key] = "";
+      }
+      localStorage.setItem("clay-settings", JSON.stringify(stored));
+    }
+  } catch (err) {
+    console.log("Could not clear clay setting " + key + ": " + err);
+  }
+}
+
+function settingString(setting) {
+  if (!setting || setting.value === undefined || setting.value === null) {
+    return "";
+  }
+  return String(setting.value).trim();
 }
 
 function handleButtonClick(buttonId) {
@@ -478,14 +541,18 @@ Pebble.addEventListener("webviewclosed", function (e) {
       tileCache.clearRouteCache();
     }
   }
-  if (
-    newSettings.gpxUrl.value &&
-    newSettings.gpxUrl.value.trim() !== "" &&
-    newSettings.gpxUrl.value.trim() !== config.gpxUrl
-  ) {
-    console.log("GPX URL provided, fetching: " + newSettings.gpxUrl.value);
-    var url = newSettings.gpxUrl.value.trim();
+  var gpxUrlValue = settingString(newSettings.gpxUrl);
+  var gpxFileValue = settingString(newSettings.gpxFile);
+  var gpxTextValue = settingString(newSettings.gpxText);
+
+  // Priority: remove > new URL > uploaded file > pasted text (legacy, raw XML)
+  if (gpxFileValue === GPX_CLEAR) {
+    clearGpxTrack();
+  } else if (gpxUrlValue !== "" && gpxUrlValue !== config.gpxUrl) {
+    console.log("GPX URL provided, fetching: " + gpxUrlValue);
+    var url = gpxUrlValue;
     config.gpxPoints = [];
+    config.gpxName = "";
     var request = new XMLHttpRequest();
     request.open("GET", url, true);
     request.onload = function () {
@@ -504,19 +571,23 @@ Pebble.addEventListener("webviewclosed", function (e) {
     };
     request.send();
     config.gpxUrl = url;
-  } else if (
-    newSettings.gpxText.value &&
-    newSettings.gpxText.value.trim() !== "" &&
-    newSettings.gpxText.value.trim() !== config.gpxText
-  ) {
+  } else if (gpxFileValue !== "") {
+    console.log("Uploaded GPX provided, loading");
+    if (loadCompactGpxAndSave(gpxFileValue)) {
+      prefetchGpxTiles();
+    }
+  } else if (gpxTextValue !== "" && gpxTextValue !== config.gpxText) {
     console.log("GPX Text provided, parsing");
     config.gpxPoints = [];
-    parseGpxTrackPointsAndSave(newSettings.gpxText.value);
+    config.gpxName = "";
+    parseGpxTrackPointsAndSave(gpxTextValue);
     prefetchGpxTiles();
-    renderTileToWatch();
-    config.gpxText = newSettings.gpxText.value;
+    config.gpxText = gpxTextValue;
+  } else {
+    console.log("No GPX data provided or GPX data unchanged");
   }
-  console.log("No GPX data provided or GPX data unchanged");
+  // the upload payload is applied now, don't keep it in Clay's stored settings
+  clearClaySetting("gpxFile");
   renderTileToWatch();
   saveSettings();
   console.log("New settings: " + JSON.stringify(newSettings));
